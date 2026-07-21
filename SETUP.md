@@ -57,6 +57,12 @@ Otherwise skip the module.
      `gotchas.md` and `domain-rules.md`). Every product-specific fact discovered
      during development goes here — misspelled package names that must stay,
      vocabulary, external-system quirks.
+   - Create the source-artifact slots that apply (`docs/business/`,
+     `docs/prototypes/`, `docs/roadmap/`) and read
+     `docs/process/source-artifacts.md` for their rules: each artifact type owns
+     one dimension of authority (roadmap = scope/status, guides = behavior,
+     prototype = layout); binary guides get an AI-readable markdown extraction;
+     specs are derived from these sources, never the reverse.
 5. **Install tooling:**
    - Copy the matching gate script(s) from `tooling/gate/` to each repo root;
      fill in the placeholder commands; verify `./gate.ps1` (or `./gate.sh`)

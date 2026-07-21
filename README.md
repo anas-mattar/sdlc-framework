@@ -47,6 +47,7 @@ sdlc-framework/
 │   ├── repository-strategy.md # incl. multi-repo wrapper pattern (optional module)
 │   ├── deployment-standards.md
 │   ├── definition-of-done.md
+│   ├── source-artifacts.md    # authority + derivation rules for guides/prototypes/roadmaps
 │   └── templates/             # AI + human review checklists
 ├── modules/
 │   └── contracts/             # OPTIONAL — external API/webhook/auth integration patterns
@@ -73,7 +74,10 @@ inside the docs assume this layout:
 │   ├── stack-backend/         # ← stacks/<backend-stack>/   (if applicable)
 │   ├── stack-frontend/        # ← stacks/<frontend-stack>/  (if applicable)
 │   ├── contracts/             # ← modules/contracts/        (if applicable)
-│   └── project/               # LAYER 3 — starts empty, grows with the project
+│   ├── project/               # LAYER 3 — starts empty, grows with the project
+│   ├── business/              # source artifacts: guides/manuals (+ md extraction)
+│   ├── prototypes/            # source artifacts: HTML prototypes + capture script
+│   └── roadmap/               # source artifacts: delivery roadmap
 └── specs/                     # per-feature artifacts (Spec Kit layout)
     └── <feature>/             # spec.md, plan.md, tasks.md, screenshots/, …
 ```

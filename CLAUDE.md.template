@@ -42,7 +42,9 @@ front:
 
 | When the task involves… | Read first |
 |---|---|
-| Starting any feature | `docs/process/project-rules.md`, {{ROADMAP_PATH_IF_ANY}} |
+| Starting any feature | `docs/process/project-rules.md`, `docs/roadmap/` (delivery source of truth) |
+| Writing or updating a `spec.md` | `docs/business/` (behavior source of truth), `docs/process/source-artifacts.md` |
+| Building or changing UI | `specs/<feature>/screenshots/`, `docs/prototypes/` (layout source of truth) |
 | Finishing any phase | `docs/process/definition-of-done.md` |
 | A migration or new entity | `docs/stack-backend/database-rules.md` |
 | Backend controllers/services/repos | `docs/stack-backend/architecture-rules.md` |
@@ -85,6 +87,11 @@ front:
 
 On any conflict between artifacts: **stop and report** — never silently choose.
 Never invent a UI layout when screenshots exist.
+
+Source artifacts each own one dimension of authority — roadmap = scope/status,
+`docs/business/` guides = behavior, prototype/screenshots = layout. Specs are
+**derived** from them; if a source changes after derivation, report the
+divergence (`docs/process/source-artifacts.md`).
 
 <!-- PROTOTYPE-DRIVEN ONLY — delete otherwise -->
 ## Prototype Screenshots (MANDATORY)

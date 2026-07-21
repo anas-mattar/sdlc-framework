@@ -21,10 +21,14 @@ Check each item and collect evidence:
    PASS for this phase (run `/phase-review` if missing).
 6. **Human review** — required before MERGE (not before commit). Confirm the user
    knows merge is blocked until a human reviewer approves.
+7. **Roadmap sync** (if `docs/roadmap/` exists) — the roadmap's status for this
+   feature/phase matches the phase markers in `specs/<feature>/tasks.md`. Update
+   the roadmap as part of completing the phase, per
+   `docs/process/source-artifacts.md`.
 
 ## Verdict
 
-- All of 1–5 true → report "Phase N is Done pending human review", and offer the
-  phase commit (`feat(<feature>): complete phase <N>`).
+- All of 1–5 and 7 true → report "Phase N is Done pending human review", and
+  offer the phase commit (`feat(<feature>): complete phase <N>`).
 - Anything false or unproven → report exactly which items are unmet and stop. Do
   not soften the verdict, do not mark the phase complete in `tasks.md`.
