@@ -1,0 +1,30 @@
+{
+  "$comment": "Copy into <project>/.claude/settings.json. On Windows without Git Bash, swap the hook command for: powershell -NoProfile -File .claude/hooks/guard-packages.ps1. Extend the allowlist with project-specific read-only commands as prompts appear.",
+  "permissions": {
+    "allow": [
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote -v)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
+      "Bash(yarn check:*)",
+      "Bash(yarn test:*)",
+      "Bash(yarn lint:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh .claude/hooks/guard-packages.sh"
+          }
+        ]
+      }
+    ]
+  }
+}

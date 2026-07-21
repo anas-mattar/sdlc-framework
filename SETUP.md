@@ -1,0 +1,83 @@
+# Setting Up a New Project
+
+Answer the 5 questions, then follow the install steps. Total time: ~15 minutes.
+(You can also hand this file to Claude Code and say "set up this project with the
+sdlc-framework at <path>" — it will interview you and do the steps.)
+
+## The 5 Questions
+
+**Q1. What stack(s)?**
+Determines which `stacks/` folder(s) you copy. If your stack has no folder yet,
+create one — start from the closest existing stack, keep the numbered-rule
+convention, and strip anything project-specific.
+
+**Q2. Single repo or multi-repo?**
+Multi-repo (separate backend/frontend repos under a thin specs-wrapper repo) adds
+real coordination cost. Choose it only when the repos have genuinely separate
+deploy lifecycles or consumers. If multi-repo: the wrapper repo holds CLAUDE.md,
+`docs/`, and `specs/`; each sub-repo gets only a `gate` script and a two-line
+`AGENTS.md` pointer ("Rules live in the parent specs repo — do not work in this
+repo standalone"). **All AI sessions start from the wrapper root — write that rule
+into CLAUDE.md.**
+
+**Q3. Is the UI prototype-driven?**
+If an HTML prototype or design screenshots exist, enable the screenshot rules:
+`specs/<feature>/screenshots/` captured with Playwright in prototype sequence
+order, and screenshots become the #1 source of truth. If there is no prototype,
+delete the screenshot items from the source-of-truth list — do not leave rules
+that can never be satisfied.
+
+**Q4. External integrations?**
+If the project calls or is called by external systems (APIs, webhooks, queues),
+copy `modules/contracts/` and require a contract doc before any integration code.
+Otherwise skip the module.
+
+**Q5. What does a mistake cost?** → picks the scope tier (see README):
+
+- **Low** (internal tool, prototype, easily re-run): **Small** tier — single
+  `spec.md` per feature, gate per feature, AI review only. Skip roadmap,
+  compliance checklists, and per-phase gating.
+- **Medium** (production app, real users, recoverable data): **Medium** tier —
+  full spec/plan/tasks, per-phase gates, both reviews, stack checklists.
+- **High** (money, inventory, compliance, external systems that sync state):
+  **Large** tier — everything, including roadmap as delivery source of truth and
+  rollback docs per feature.
+
+## Install Steps
+
+1. **Copy layer 1 (always):**
+   - `process/` → `<project>/docs/process/`
+2. **Copy layer 2 (per Q1):**
+   - `stacks/<backend>/` → `docs/stack-backend/`
+   - `stacks/<frontend>/` → `docs/stack-frontend/`
+3. **Copy modules (per Q4):**
+   - `modules/contracts/` → `docs/contracts/`
+4. **Create layer 3 (empty):**
+   - Copy `tooling/project-docs/` → `docs/project/` (starter skeletons for
+     `gotchas.md` and `domain-rules.md`). Every product-specific fact discovered
+     during development goes here — misspelled package names that must stay,
+     vocabulary, external-system quirks.
+5. **Install tooling:**
+   - Copy the matching gate script(s) from `tooling/gate/` to each repo root;
+     fill in the placeholder commands; verify `./gate.ps1` (or `./gate.sh`)
+     prints `EXIT: 0` on the untouched baseline **before any feature work**.
+   - Copy `tooling/claude/` content into `<project>/.claude/` (settings hooks,
+     `/phase-review`, `/phase-done` commands). Review the permissions allowlist.
+6. **Generate CLAUDE.md:**
+   - Copy `CLAUDE.md.template` → `<project>/CLAUDE.md`, fill every `{{…}}`
+     placeholder, delete sections your tier/answers exclude, and stamp the
+     framework version from `VERSION`.
+7. **Spec scaffold:**
+   - If using GitHub Spec Kit, run `specify init` and adopt its
+     `specs/<feature>/` layout; copy `process/templates/` review checklists into
+     `specs/_templates/`. Otherwise create `specs/` manually with the same shape.
+8. **Baseline commit:**
+   - Commit everything as `chore: adopt sdlc-framework vX.Y.Z` before starting
+     feature work, so the first `git diff --stat` against a feature is clean.
+
+## After Setup — the Two Habits That Keep It Working
+
+1. **Upstream-first:** any improvement to a layer-1/2 file gets ported back to the
+   framework repo and `VERSION` bumped. Project copies never diverge silently.
+2. **Layer discipline:** if you are about to write a product name into a
+   `docs/process/` or `docs/stack-*/` file — stop; it belongs in `docs/project/`.

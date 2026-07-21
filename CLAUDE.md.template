@@ -1,0 +1,131 @@
+# CLAUDE.md
+
+<!-- Generated from sdlc-framework CLAUDE.md.template.
+     Fill every {{…}} placeholder. Delete sections excluded by your SETUP.md answers.
+     Keep this file under ~200 lines: non-negotiables, pointers, and gotchas only —
+     detail lives in docs/. -->
+
+Framework: sdlc-framework v{{FRAMEWORK_VERSION}}
+
+Guidance for Claude Code working in this repository.
+
+This project uses a controlled SDLC workflow with Spec Kit style documents.
+Do not implement everything at once.
+
+## Precedence Rule
+
+If this file and a `docs/` file conflict, **the `docs/` file wins** — report the
+conflict so this file gets corrected. This file is an index plus non-negotiables,
+not the source of detail.
+
+<!-- MULTI-REPO ONLY — delete this section for single-repo projects -->
+## Repository Layout — Multi-Repo Wrapper
+
+This root directory is a thin wrapper acting as the shared specs/documentation
+repository. The subdirectories are **independent git repositories** with their own
+remotes — always run git commands inside the subdirectory you changed, never at
+the root:
+
+- `{{BACKEND_DIR}}/` — {{BACKEND_STACK_SUMMARY}} (`{{BACKEND_REPO_URL}}`)
+- `{{FRONTEND_DIR}}/` — {{FRONTEND_STACK_SUMMARY}} (`{{FRONTEND_REPO_URL}}`)
+
+**All Claude Code sessions must be started from this wrapper root — never from
+inside a sub-repo.** When implementing a feature, always confirm which repository
+is active before changing files. See `docs/process/repository-strategy.md` for the
+cross-repository feature rule (backend contract before frontend implementation).
+<!-- END MULTI-REPO ONLY -->
+
+## Task → Doc Map
+
+Read the mapped doc **before** starting the matching task — not the whole list up
+front:
+
+| When the task involves… | Read first |
+|---|---|
+| Starting any feature | `docs/process/project-rules.md`, {{ROADMAP_PATH_IF_ANY}} |
+| Finishing any phase | `docs/process/definition-of-done.md` |
+| A migration or new entity | `docs/stack-backend/database-rules.md` |
+| Backend controllers/services/repos | `docs/stack-backend/architecture-rules.md` |
+| Any data-entry form | `docs/stack-frontend/forms.md` |
+| Any data table/list | `docs/stack-frontend/tables.md` |
+| New API procedure / data fetching | `docs/stack-frontend/trpc.md` |
+| Auth, permissions, sensitive data | `docs/stack-frontend/security.md` |
+| A new external call or webhook | `docs/contracts/` (contract doc first, code second) |
+| Anything product-specific | `docs/project/` (domain rules + gotchas) |
+
+## Workflow (non-negotiable)
+
+1. Check current branch and working tree; stop if unrelated changes exist.
+2. Run the baseline gate on untouched code.
+3. One feature branch per feature. <!-- multi-repo: one branch per affected repo -->
+4. Create/update `spec.md` → `plan.md` → `tasks.md` and get approval.
+5. Implement **one phase only**, then stop and ask the user to run the gate.
+6. The gate is `./gate.ps1` (or `./gate.sh`) at the repo root — it prints
+   `EXIT: <code>`. **Do not claim success until the user reports `EXIT: 0`.**
+7. User checks `git diff --stat`; fix only current-phase issues; commit the phase.
+8. AI review (`/phase-review`), then human review, then merge. Never merge on AI
+   review alone.
+
+## Strict Rules
+
+- Implement one phase only; do not continue without user approval.
+- Do not refactor unrelated files or change unrelated features.
+- Do not add packages unless approved in the feature's `plan.md` (a hook enforces
+  this — see `.claude/settings.json`).
+- Do not change architecture unless approved in `plan.md`.
+
+## Source of Truth Priority
+
+1. `specs/<feature>/screenshots/`  <!-- delete if not prototype-driven -->
+2. `specs/<feature>/spec.md`
+3. `specs/<feature>/plan.md`
+4. `specs/<feature>/contracts/`
+5. `specs/<feature>/data-model.md`
+6. `specs/<feature>/tasks.md`
+
+On any conflict between artifacts: **stop and report** — never silently choose.
+Never invent a UI layout when screenshots exist.
+
+<!-- PROTOTYPE-DRIVEN ONLY — delete otherwise -->
+## Prototype Screenshots (MANDATORY)
+
+`specs/<feature>/screenshots/` is generated from the HTML prototype
+({{PROTOTYPE_PATH}}) with Playwright, one full-page screenshot per view, **in the
+prototype's own sequence**, named `01-…`, `02-…`. The implemented UI must follow
+them exactly — layout, component placement, flow.
+<!-- END PROTOTYPE-DRIVEN ONLY -->
+
+## Backend Reference (`{{BACKEND_DIR}}/`)
+
+```sh
+{{BACKEND_BUILD_COMMAND}}        # e.g. dotnet build MySolution.sln
+{{BACKEND_RUN_COMMAND}}          # e.g. dotnet run --project My.API   → {{BACKEND_LOCAL_URL}}
+{{BACKEND_TEST_COMMAND}}         # e.g. dotnet test My.API.Tests
+```
+
+Gate: `./gate.ps1` inside `{{BACKEND_DIR}}/`.
+Architecture summary: {{BACKEND_ARCHITECTURE_ONE_PARAGRAPH}}
+<!-- Keep this a short paragraph of stable facts + pointers to files.
+     No counts that go stale ("~129 entities") — point at the file instead. -->
+
+## Frontend Reference (`{{FRONTEND_DIR}}/`)
+
+```sh
+{{FRONTEND_DEV_COMMAND}}         # e.g. yarn dev
+{{FRONTEND_TEST_COMMAND}}        # e.g. yarn test
+```
+
+Gate: `./gate.ps1` inside `{{FRONTEND_DIR}}/`.
+Architecture summary: {{FRONTEND_ARCHITECTURE_ONE_PARAGRAPH}}
+
+## Project Knowledge (layer 3 — grows over time)
+
+Domain rules, external systems, and vocabulary: `docs/project/domain-rules.md`.
+
+Gotchas — traps that look like mistakes but are intentional (`docs/project/gotchas.md`):
+
+- {{GOTCHA_1}} <!-- e.g. "package id 'DPO.Batches.Clinet' is really misspelled — do not fix" -->
+- {{GOTCHA_2}}
+
+<!-- This is the most valuable section of the file. Every time a session trips
+     over something non-obvious, add one line here or in gotchas.md. -->
