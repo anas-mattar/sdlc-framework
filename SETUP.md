@@ -40,7 +40,8 @@ Solo: skip `docs/process/team-workflow.md`. Two or more: it applies — roadmap
 items carry an Owner column (one feature = one owner = one branch), spec numbers
 are allocated via the claim commit or tracker issue IDs (pick one scheme, never
 computed by scanning folders), CI runs the same gate scripts on every PR, human
-review means reviewer ≠ owner, and shared surfaces are contract-first. `.claude/settings.json` is committed/shared;
+review means reviewer ≠ owner, and shared surfaces are contract-first.
+Worktrees for parallel feature checkouts are optional (team-workflow §7). `.claude/settings.json` is committed/shared;
 `settings.local.json` is per developer and gitignored.
 
 **Q6. What does a mistake cost?** → picks the scope tier (see README):

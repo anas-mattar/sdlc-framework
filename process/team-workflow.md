@@ -115,6 +115,36 @@ that consumes it — never change a shared contract silently mid-phase.
 A developer must not weaken a shared hook by overriding it locally; changing
 shared enforcement is a reviewed commit to `settings.json`.
 
+## 7. Worktrees (OPTIONAL)
+
+Git worktrees are an **optional** approach for working on multiple features in
+parallel (a developer running two features, or parallel AI sessions) without
+stash-juggling. Projects that don't need parallel checkouts simply skip this
+section — nothing else in the framework depends on it.
+
+If adopted:
+
+- **One worktree = one feature = one branch.** Never share a worktree across
+  features — it breaks the `git diff --stat` scope check. Two worktrees cannot
+  check out the same branch, which is harmless since branches are per-feature.
+- Everything the framework ships travels with the checkout automatically:
+  `CLAUDE.md`, `docs/`, gate scripts, and `.claude/` (hooks, commands) are
+  committed files, so every worktree has them. Gates run per worktree; the
+  `.claude/allow-package-changes` marker is per-worktree, so package approval
+  for one feature never leaks to another.
+- Run the **baseline gate** in a fresh worktree before feature work starts,
+  same as any checkout. Prune worktrees (`git worktree prune` / remove) when
+  the feature merges.
+- Claims are unaffected: `/claim-feature` still pushes to the one shared
+  `main` — worktrees never weaken the lock.
+- **Multi-repo wrapper projects:** do NOT worktree the wrapper — nested code
+  repos are not tracked by it, so a wrapper worktree is a hollow shell (docs
+  and specs only, no code). Instead keep ONE wrapper checkout as the permanent
+  session root and create worktrees **per sub-repo** for parallel code work
+  (e.g. `git -C <backend-dir> worktree add ../<backend-dir>-015 feature/015-x`).
+  The wrapper's rules still govern because sessions still start at the wrapper
+  root; only the code checkout is parallelized.
+
 ## What Does NOT Change
 
 - One phase only, gate per phase, spec-first, `git diff --stat` scope checks.
