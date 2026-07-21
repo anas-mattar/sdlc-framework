@@ -23,6 +23,39 @@ feature rule in `docs/process/repository-strategy.md` is the template.
   are one-line changes — trivially mergeable, so the shared roadmap file does not
   become a merge-conflict hotspot.
 
+## 2a. Feature Numbering — Allocated, Not Computed
+
+Sequential spec numbers (`specs/feature/002-…`) race when two developers start
+features concurrently: any scheme that **computes** the next number by scanning
+existing folders hands both developers the same number. On a team, numbers are
+**allocated** instead:
+
+- **The claim commit is the allocator.** The same roadmap commit that sets the
+  owner (rule 2) also assigns the next free number. Order is strict:
+  1. Pull the specs repo.
+  2. Add the roadmap line: number + feature name + owner.
+  3. **Push immediately** — before creating any branch, folder, or spec.
+  4. Push rejected? Someone claimed concurrently: pull, take the next free
+     number, push again.
+
+  Git itself is the lock — two claims of the same number cannot both land, and
+  the collision surfaces at the cheapest moment: before anything references the
+  number. Hence the strict order: **claim → push → then branch and spec**,
+  never the reverse.
+- **The number is identity: allocated once, never recycled, never compacted.**
+  Branches, folders, and commits reference it. A cancelled feature's number
+  stays burned; gaps are fine — numbers are identifiers, not counters.
+- **Scaffold auto-numbering is advisory.** Tools that compute the next number
+  from existing directories (e.g. Spec Kit's create-new-feature script) offer a
+  suggestion; the roadmap allocation wins on conflict.
+- **Sanctioned alternative — tracker issue IDs.** On issue-driven projects
+  (GitHub/GitLab), create the issue first and use its number as the spec number
+  (`specs/feature/142-…`). The tracker is an atomic allocator: zero
+  coordination, and every spec folder links to its ticket. Numbers will be
+  sparse and non-contiguous — cosmetic only. Pick ONE scheme per project.
+
+Solo developers are unaffected: with one writer, computed numbering is safe.
+
 ## 3. CI Runs the Same Gate Scripts
 
 CI runs `./gate.sh` (or `gate.ps1`) on every PR — the exact script the developer
