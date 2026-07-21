@@ -37,6 +37,7 @@ sdlc-framework/
 ├── VERSION                    # framework version — stamp it into consuming projects
 ├── README.md                  # this file
 ├── SETUP.md                   # 6-question guided setup for a new project
+├── ADOPTION.md                # adopting in an EXISTING project (governs new work only)
 ├── CLAUDE.md.template         # generates the consuming project's CLAUDE.md
 ├── process/                   # LAYER 1 — copy into every project
 │   ├── project-rules.md       # spec-first, one-phase-only, branch/commit/review rules

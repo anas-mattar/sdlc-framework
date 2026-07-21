@@ -1,5 +1,9 @@
 # Setting Up a New Project
 
+> **Existing project?** Read `ADOPTION.md` instead — it wraps these install
+> steps in a brownfield path (baseline gate first, tribal-knowledge capture,
+> compliance-as-you-touch, no spec backfilling).
+
 Answer the 6 questions, then follow the install steps. Total time: ~15 minutes.
 (You can also hand this file to Claude Code and say "set up this project with the
 sdlc-framework at <path>" — it will interview you and do the steps.)
