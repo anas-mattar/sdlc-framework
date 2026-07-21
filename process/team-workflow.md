@@ -31,7 +31,9 @@ existing folders hands both developers the same number. On a team, numbers are
 **allocated** instead:
 
 - **The claim commit is the allocator.** The same roadmap commit that sets the
-  owner (rule 2) also assigns the next free number. Order is strict:
+  owner (rule 2) also assigns the next free number. The `/claim-feature` command
+  (`tooling/claude/commands/`) executes this protocol deterministically — prefer
+  it over following the steps from memory. Order is strict:
   1. Pull the specs repo.
   2. Add the roadmap line: number + feature name + owner.
   3. **Push immediately** — before creating any branch, folder, or spec.
