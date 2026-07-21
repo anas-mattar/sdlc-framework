@@ -42,6 +42,16 @@ existing folders hands both developers the same number. On a team, numbers are
   the collision surfaces at the cheapest moment: before anything references the
   number. Hence the strict order: **claim → push → then branch and spec**,
   never the reverse.
+- **The claim commit goes directly to main — the one exemption from the review
+  gate.** A claim held on a branch or in an open PR is invisible to other
+  developers' pulls, so the lock would not exist exactly when it is needed. The
+  exemption is safe because a claim commit contains only the one roadmap line
+  (number + feature name + owner) — no code, no spec content. Everything after
+  it follows the normal process. On multi-repo projects this targets the
+  wrapper/specs repo's main; code-repo branch protection is unaffected. If even
+  the specs repo forbids direct pushes to main, use the tracker-ID scheme
+  instead — assigning yourself the issue IS the claim, with the same atomic,
+  immediately-visible lock.
 - **The number space is project-wide — one sequence, even with multiple
   roadmaps.** Numbers identify entries in shared namespaces (`specs/feature/`
   folders, branches, commits), so per-roadmap sequences would collide. "Next
