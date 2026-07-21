@@ -117,3 +117,20 @@ Rules common to all sources:
 - Living document: keep its statuses in sync with `specs/<feature>/tasks.md`
   phase markers as work merges. `/phase-done` includes this sync as a checked
   item.
+
+#### Roadmap structure
+
+- A roadmap is never **derived from** guides: guides own behavior ("what the
+  system must do"), the roadmap owns prioritization ("what gets built when") — a
+  human decision. Roadmap items **reference** the guide sections they implement;
+  the two slice the project along different axes (behavior domains vs. delivery
+  streams) and must not be forced to align.
+- **Default: one roadmap per project.** Split into one roadmap per delivery
+  stream/module only when a single file gets unwieldy — never split by guide.
+- **Every feature belongs to exactly one roadmap.** A feature's status must
+  never be trackable in two places.
+- If more than one roadmap exists, keep a thin index (`docs/roadmap/README.md`:
+  one line per roadmap — stream, owner, status) so "consult the roadmap" has an
+  unambiguous entry point.
+- On multi-developer projects, roadmap items carry an **owner** — see
+  `docs/process/team-workflow.md`.

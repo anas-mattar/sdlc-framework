@@ -36,7 +36,7 @@ layers 1 or 2.
 sdlc-framework/
 ├── VERSION                    # framework version — stamp it into consuming projects
 ├── README.md                  # this file
-├── SETUP.md                   # 5-question guided setup for a new project
+├── SETUP.md                   # 6-question guided setup for a new project
 ├── CLAUDE.md.template         # generates the consuming project's CLAUDE.md
 ├── process/                   # LAYER 1 — copy into every project
 │   ├── project-rules.md       # spec-first, one-phase-only, branch/commit/review rules
@@ -48,6 +48,7 @@ sdlc-framework/
 │   ├── deployment-standards.md
 │   ├── definition-of-done.md
 │   ├── source-artifacts.md    # authority + derivation rules for guides/prototypes/roadmaps
+│   ├── team-workflow.md       # multi-developer coordination (ownership, CI gate, peer review)
 │   └── templates/             # AI + human review checklists
 ├── modules/
 │   └── contracts/             # OPTIONAL — external API/webhook/auth integration patterns

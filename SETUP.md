@@ -1,10 +1,10 @@
 # Setting Up a New Project
 
-Answer the 5 questions, then follow the install steps. Total time: ~15 minutes.
+Answer the 6 questions, then follow the install steps. Total time: ~15 minutes.
 (You can also hand this file to Claude Code and say "set up this project with the
 sdlc-framework at <path>" — it will interview you and do the steps.)
 
-## The 5 Questions
+## The 6 Questions
 
 **Q1. What stack(s)?**
 Determines which `stacks/` folder(s) you copy. If your stack has no folder yet,
@@ -35,7 +35,14 @@ If the project calls or is called by external systems (APIs, webhooks, queues),
 copy `modules/contracts/` and require a contract doc before any integration code.
 Otherwise skip the module.
 
-**Q5. What does a mistake cost?** → picks the scope tier (see README):
+**Q5. How many developers?**
+Solo: skip `docs/process/team-workflow.md`. Two or more: it applies — roadmap
+items carry an Owner column (one feature = one owner = one branch), CI runs the
+same gate scripts on every PR, human review means reviewer ≠ owner, and shared
+surfaces are contract-first. `.claude/settings.json` is committed/shared;
+`settings.local.json` is per developer and gitignored.
+
+**Q6. What does a mistake cost?** → picks the scope tier (see README):
 
 - **Low** (internal tool, prototype, easily re-run): **Small** tier — single
   `spec.md` per feature, gate per feature, AI review only. Skip roadmap,

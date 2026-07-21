@@ -54,6 +54,7 @@ front:
 | Auth, permissions, sensitive data | `docs/stack-frontend/security.md` |
 | A new external call or webhook | `docs/contracts/` (contract doc first, code second) |
 | Anything product-specific | `docs/project/` (domain rules + gotchas) |
+| Claiming/starting a feature on a team | `docs/process/team-workflow.md` |
 
 ## Workflow (non-negotiable)
 
