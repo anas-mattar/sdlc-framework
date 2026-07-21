@@ -55,6 +55,7 @@ front:
 | A new external call or webhook | `docs/contracts/` (contract doc first, code second) |
 | Anything product-specific | `docs/project/` (domain rules + gotchas) |
 | Claiming/starting a feature on a team | `docs/process/team-workflow.md` |
+| Running multiple AI agents/sessions | `docs/process/orchestration.md` |
 
 ## Workflow (non-negotiable)
 

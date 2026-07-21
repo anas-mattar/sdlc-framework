@@ -50,6 +50,7 @@ sdlc-framework/
 │   ├── definition-of-done.md
 │   ├── source-artifacts.md    # authority + derivation rules for guides/prototypes/roadmaps
 │   ├── team-workflow.md       # multi-developer coordination (ownership, CI gate, peer review)
+│   ├── orchestration.md       # OPTIONAL — boundaries for multi-agent AI work
 │   └── templates/             # AI + human review checklists
 ├── modules/
 │   └── contracts/             # OPTIONAL — external API/webhook/auth integration patterns
