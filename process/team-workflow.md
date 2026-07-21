@@ -42,6 +42,15 @@ existing folders hands both developers the same number. On a team, numbers are
   the collision surfaces at the cheapest moment: before anything references the
   number. Hence the strict order: **claim → push → then branch and spec**,
   never the reverse.
+- **The number space is project-wide — one sequence, even with multiple
+  roadmaps.** Numbers identify entries in shared namespaces (`specs/feature/`
+  folders, branches, commits), so per-roadmap sequences would collide. "Next
+  free number" means the highest across **all** roadmaps and existing spec
+  folders, plus one (the roadmap index in `docs/roadmap/README.md` makes this a
+  quick check). Stream grouping lives in the slug (`014-grn-annex`,
+  `015-putaway-zones`), never in the number. On multi-roadmap projects the
+  tracker-ID scheme below is especially attractive — issue numbers are already
+  one global atomic sequence.
 - **The number is identity: allocated once, never recycled, never compacted.**
   Branches, folders, and commits reference it. A cancelled feature's number
   stays burned; gaps are fine — numbers are identifiers, not counters.
