@@ -20,12 +20,15 @@ deploy lifecycles or consumers. If multi-repo: the wrapper repo holds CLAUDE.md,
 repo standalone"). **All AI sessions start from the wrapper root — write that rule
 into CLAUDE.md.**
 
-**Q3. Is the UI prototype-driven?**
-If an HTML prototype or design screenshots exist, enable the screenshot rules:
-`specs/<feature>/screenshots/` captured with Playwright in prototype sequence
-order, and screenshots become the #1 source of truth. If there is no prototype,
-delete the screenshot items from the source-of-truth list — do not leave rules
-that can never be satisfied.
+**Q3. Where do designs come from?**
+The design source can vary **per feature**: HTML prototype, Figma, AI-generated
+mock, or no design at all. All sources normalize to the same contract — a frozen
+`specs/<feature>/screenshots/` folder with provenance in `notes.md` — per the
+table in `docs/process/source-artifacts.md`. When screenshots exist for a
+feature they are the #1 layout authority; when a feature has no design, the
+`spec.md` layout section plus the app's design system govern instead. Note the
+project's *usual* source here so CLAUDE.md can say so, but do not delete the
+fallback chain — different features may use different sources.
 
 **Q4. External integrations?**
 If the project calls or is called by external systems (APIs, webhooks, queues),

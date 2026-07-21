@@ -13,7 +13,7 @@ compete with each other:
 |---|---|---|---|
 | **Roadmap** | `docs/roadmap/` | scope, sequencing, delivery status | behavior or layout |
 | **Guide / manual / requirement doc** | `docs/business/` | business behavior and rules | layout or delivery order |
-| **HTML prototype → feature screenshots** | `docs/prototypes/` → `specs/<feature>/screenshots/` | UI layout, component placement, flow | business rules or scope |
+| **Design prototype (any source) → feature screenshots** | `docs/prototypes/` → `specs/<feature>/screenshots/` | UI layout, component placement, flow | business rules or scope |
 
 - A conflict **within** a dimension (e.g. `spec.md` and the manual disagree about
   behavior) → **stop and report**; the user decides.
@@ -47,17 +47,40 @@ only permitted frozen derivative is `specs/<feature>/screenshots/`.
 - When the original updates, regenerate the markdown — that regeneration diff is
   the change review.
 
-### HTML prototypes (`docs/prototypes/`)
+### Prototypes (`docs/prototypes/`) — many sources, one contract
 
-- The prototype is a **living** file; per-feature `screenshots/` are its frozen
-  derivative, captured with the capture script checked into `docs/prototypes/`
-  (screenshot generation must be reproducible, not tribal knowledge).
-- Capture one full-page screenshot per view, **in the prototype's own sequence**,
-  named with a numeric prefix (`01-…`, `02-…`).
-- Record in the feature's `notes.md` which prototype commit the screenshots were
-  captured from.
-- If the prototype changes after capture, regenerated screenshots are a **change
-  request to the spec** — stop and report; do not silently re-capture mid-phase.
+The design source varies per feature (HTML, Figma, AI-generated, or none), but
+the contract downstream is always the same: **if `specs/<feature>/screenshots/`
+exists, it is the frozen layout authority**, with provenance recorded in the
+feature's `notes.md`. Implementation and review never care about the source
+format.
+
+| Design source | Upstream truth | How to freeze | Provenance in `notes.md` |
+|---|---|---|---|
+| HTML prototype | `docs/prototypes/*.html` | Playwright capture, in prototype sequence | prototype git commit |
+| Figma | the Figma file | export frames as sequence-numbered PNGs into `screenshots/` | Figma file URL + version/date |
+| AI-generated design | the generated HTML **after human approval** | promote to `docs/prototypes/`, then the HTML pipeline | approval date + commit |
+| No design | `spec.md` layout section + the app's design system | none — `screenshots/` is absent | one line: "no design — spec + design system govern" |
+
+Rules common to all sources:
+
+- Screenshots are one full-page image per view, **in the source's own sequence**,
+  named with a numeric prefix (`01-…`, `02-…`). The capture/export method must be
+  reproducible — the capture script lives in `docs/prototypes/`.
+- If the upstream design changes after capture, regenerated screenshots are a
+  **change request to the spec** — stop and report; never silently re-capture
+  mid-phase. This applies doubly to Figma, which mutates outside git with no
+  diff: the exported snapshot is the contract, not the live file.
+- **AI-generated designs require human approval before becoming authority.**
+  Without approval the "never invent a UI layout" rule is circular — the AI would
+  be treating its own invention as truth. Approval is what promotes a generated
+  mock from *proposal* to *source artifact*.
+- **No design is legitimate, not a violation.** Layout authority falls to the
+  next level: the `spec.md` layout description (wireframe-level words required
+  for any non-trivial screen), then the app's design system and stack rules. For
+  features with meaningful UI, the AI should *offer* a quick generated mock
+  (converting "no design" into the AI-generated path); do not force it for
+  trivial UI. Never demand screenshots that cannot exist.
 
 ### Roadmaps (`docs/roadmap/`)
 

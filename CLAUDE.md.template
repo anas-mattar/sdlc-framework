@@ -78,7 +78,7 @@ front:
 
 ## Source of Truth Priority
 
-1. `specs/<feature>/screenshots/`  <!-- delete if not prototype-driven -->
+1. `specs/<feature>/screenshots/`  <!-- per feature; absent when the feature has no design -->
 2. `specs/<feature>/spec.md`
 3. `specs/<feature>/plan.md`
 4. `specs/<feature>/contracts/`
@@ -93,14 +93,22 @@ Source artifacts each own one dimension of authority — roadmap = scope/status,
 **derived** from them; if a source changes after derivation, report the
 divergence (`docs/process/source-artifacts.md`).
 
-<!-- PROTOTYPE-DRIVEN ONLY — delete otherwise -->
-## Prototype Screenshots (MANDATORY)
+## Design Source & Screenshots
 
-`specs/<feature>/screenshots/` is generated from the HTML prototype
-({{PROTOTYPE_PATH}}) with Playwright, one full-page screenshot per view, **in the
-prototype's own sequence**, named `01-…`, `02-…`. The implemented UI must follow
-them exactly — layout, component placement, flow.
-<!-- END PROTOTYPE-DRIVEN ONLY -->
+Usual design source for this project: {{DESIGN_SOURCE}} <!-- HTML prototype at
+{{PROTOTYPE_PATH}} / Figma / AI-generated mocks / mostly no design -->
+
+Per feature, whatever the source, the contract is the same
+(`docs/process/source-artifacts.md`):
+
+- If `specs/<feature>/screenshots/` exists (captured/exported from the design
+  source, sequence-numbered `01-…`, provenance in `notes.md`), it is the **#1
+  layout authority** — the implemented UI must follow it exactly.
+- AI-generated designs become authority only **after human approval** promotes
+  them to `docs/prototypes/`.
+- If a feature has no design, the `spec.md` layout section plus the app's design
+  system govern; offer a generated mock for non-trivial UI, and never demand
+  screenshots that cannot exist.
 
 ## Backend Reference (`{{BACKEND_DIR}}/`)
 
