@@ -38,14 +38,42 @@ only permitted frozen derivative is `specs/<feature>/screenshots/`.
 
 ## Per-Type Rules
 
-### Guides and manuals (`docs/business/`)
+### Guides, manuals, requirement docs (`docs/business/`) — many sources, one contract
 
-- Binary originals (`.docx`, `.pdf`) are opaque to diffs and poorly readable by
-  AI. Keep the original, but extract an **AI-readable markdown version** beside
-  it and declare the markdown the working authority. Stamp it with the source
-  version (e.g. `> Extracted from <document> v1.1, June 2026`).
-- When the original updates, regenerate the markdown — that regeneration diff is
-  the change review.
+The working authority for spec derivation is always a **versioned markdown
+snapshot in `docs/business/`** — never the live external source. The source type
+only changes how the snapshot is produced and refreshed:
+
+| Source | Upstream truth | How to freeze | Provenance (frontmatter in the snapshot) |
+|---|---|---|---|
+| File in the repo (docx/pdf) | the original file | markdown extraction beside it | document version + extraction date |
+| GitHub / GitLab (repo or wiki) | the source repo | copy the file(s) at a **pinned commit/tag** | repo URL + commit SHA + date |
+| Notion (or similar wiki SaaS) | the page | export the page(s) to markdown | page URL + export date |
+| Loose file (shared drive, email) | the issuing party's document | copy the original in + markdown extraction | origin, stated version, date received |
+
+Rules common to all sources:
+
+- **Snapshot before deriving.** A document does not exist for spec purposes until
+  its markdown snapshot is in `docs/business/` with provenance recorded. "The
+  spec is based on the PDF someone mailed in March" must never be true.
+- **Pin, don't track.** For git-hosted sources, snapshot at a specific commit or
+  tag — never a branch. A branch reference mutates under the specs with nothing
+  forcing a review, same as a live Notion page.
+- **Refresh = re-export, and the git diff of the snapshot is the change review.**
+  This is what makes the derivation rule enforceable uniformly: upstream changes
+  become visible diffs regardless of source type. An upstream change after a
+  feature derived from the doc is a change request — stop and report.
+- **Access.** Live sources (Notion, private repos) may be unreachable for the AI,
+  CI, or a new teammate exactly when needed; the snapshot guarantees the doc is
+  always readable. Automate the export where the source has an API.
+- **Confidentiality check before copying.** Snapshotting pulls external content
+  into a repo that may have wider access than the source did. Ask "is this doc
+  safe to commit here?" first; if not, keep only a reference + version record,
+  note that the doc must be consulted manually, and accept the weaker guarantee.
+- Binary originals (`.docx`, `.pdf`) kept in the repo are opaque to diffs and
+  poorly readable by AI — the markdown extraction beside them is the working
+  authority, stamped with the source version (e.g. `> Extracted from <document>
+  v1.1, June 2026`).
 
 ### Prototypes (`docs/prototypes/`) — many sources, one contract
 

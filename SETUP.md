@@ -64,8 +64,10 @@ Otherwise skip the module.
      `docs/prototypes/`, `docs/roadmap/`) and read
      `docs/process/source-artifacts.md` for their rules: each artifact type owns
      one dimension of authority (roadmap = scope/status, guides = behavior,
-     prototype = layout); binary guides get an AI-readable markdown extraction;
-     specs are derived from these sources, never the reverse.
+     prototype = layout); guides and requirement docs — wherever they live
+     (repo file, GitHub/GitLab, Notion, loose file) — get a versioned markdown
+     snapshot in `docs/business/` with provenance before any spec derives from
+     them; specs are derived from these sources, never the reverse.
 5. **Install tooling:**
    - Copy the matching gate script(s) from `tooling/gate/` to each repo root;
      fill in the placeholder commands; verify `./gate.ps1` (or `./gate.sh`)
