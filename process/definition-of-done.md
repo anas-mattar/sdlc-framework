@@ -17,9 +17,11 @@ project constitution into one place. It is the operational form of constitution
    exist and are approved before implementation begins (constitution I).
 2. **Single-phase scope respected** — only the one approved phase was implemented; no
    unrelated changes are bundled in (constitution XVII; CLAUDE.md Strict Rules).
-3. **Gate passed with user-confirmed exit code** — the user (not AI) ran the gate
-   script (`docs/process/gate-command.md`) and reported `EXIT: 0`. AI MUST NOT claim
-   success without that confirmation (constitution XVII).
+3. **Gate passed, proven by a valid receipt** — the user (not AI) ran the gate
+   script, and `./gate.ps1 -Verify` (or `./gate.sh --verify`) reports
+   `RECEIPT: valid` — a full gate at `EXIT: 0` against the *current* working tree
+   (`docs/process/gate-command.md`). A stale, `min`, or missing receipt does not
+   satisfy this item, and neither does a pasted exit code (constitution XVII).
 4. **Diff reviewed / scope guard** — `git diff --stat` was reviewed and shows only the
    files this phase intended to change; unrelated changes were reverted
    (`docs/process/review-process.md`).
@@ -34,8 +36,10 @@ project constitution into one place. It is the operational form of constitution
    before merge** (constitution XVI;
    `specs/_templates/human-pr-review-template.md`).
 
-Only after items 1–6 are all true may the phase be **committed and merged**. Merge
-occurs only after the human approval in item 6.
+Items 1–5 gate the **phase commit**. Item 6 gates the **merge**: a human reviewer
+approves the pull request containing the committed phase. The order is
+commit → review → merge, so a reviewer has a commit to review; never merge on
+items 1–5 alone.
 
 Operationally, run item 5 with the `/phase-review` command, and the final check
 across all six gates with the `/phase-done` command.

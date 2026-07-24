@@ -9,9 +9,9 @@
 
 When the first deployable module is planned, this document will define:
 
-- **CI/CD gate enforcement** — the gate (`docs/process/gate-command.md`) must pass
-  in CI before any merge to a protected branch; the user-confirmed exit code rule
-  applies to automated gates as well.
+- **CI/CD gate enforcement** — beyond the per-repo gate check
+  (`tooling/ci/gate.yml`), the deployment pipeline's own gates and the branch
+  protection that makes them non-optional.
 - **Environment promotion** — the ordered path (e.g. dev → test → staging →
   production) and the approval required at each boundary.
 - **Secrets handling** — secrets are never committed to source; how they are

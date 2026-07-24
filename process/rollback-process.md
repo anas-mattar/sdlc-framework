@@ -20,8 +20,9 @@ Transactional business records MUST NOT be physically deleted to roll back a cha
 
 - Never `DELETE` or `DROP` posted transactional records as a rollback mechanism.
 
-  > Example (from the WMS project): receiving records, put-away movements, stock
-  > movements, discrepancy finalizations.
+  > Examples: posted ledger entries, completed movements or shipments, finalized
+  > adjustments — anything a downstream system or audit trail has already
+  > consumed. List this project's cases in `docs/project/domain-rules.md`.
 
 - Finalized records are append-only. Correct them with a **reversal or adjustment**;
   do not edit or delete the original.

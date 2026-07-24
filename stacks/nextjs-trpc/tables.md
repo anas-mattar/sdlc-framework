@@ -10,7 +10,7 @@ Composition levels:
   paging) may compose `BaseDataTable` (Layer 1) directly with a `ColumnDef`
   factory. They still get `columns.tsx` and the feature folder; they skip URL
   state because there is nothing to page.
-  > Example (from the WMS project): permission matrix, closing checklist.
+  > Examples: a permission matrix, a fixed checklist.
 
 Matrix-grid support on `BaseDataTable`:
 
@@ -50,7 +50,7 @@ export interface PaginatedResponse<T> {
 export interface BaseTableFilter {
   searchTerm?: string;
   // plus the project's global scope fields, defined once here
-  // > Example (from the WMS project): legalEntityCode?, warehouseCode?
+  // > Example: organisationCode?, siteCode? — whatever scopes every query
 }
 
 export interface BaseTableConfig {

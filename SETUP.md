@@ -40,7 +40,13 @@ copy `modules/contracts/` and require a contract doc before any integration code
 Otherwise skip the module.
 
 **Q5. How many developers?**
-Solo: skip `docs/process/team-workflow.md`. Two or more: it applies — roadmap
+Solo: skip the *coordination* rules in `docs/process/team-workflow.md` (ownership,
+claim commits, reviewer ≠ owner) — but **still adopt §3, "CI runs the same gate
+scripts."** The local gate is run by the developer and its receipt is local
+evidence; CI is the only check not performed by the party being checked. A team has
+peer review as a second line of defence, and a solo project has nothing else — so
+skipping CI removes the last mechanical enforcement in the framework. Copy
+`tooling/ci/gate.yml` and require the check on `main`. Two or more: it applies — roadmap
 items carry an Owner column (one feature = one owner = one branch), spec numbers
 are allocated via the claim commit or tracker issue IDs (pick one scheme, never
 computed by scanning folders), CI runs the same gate scripts on every PR, human
@@ -85,8 +91,24 @@ Worktrees for parallel feature checkouts are optional (team-workflow §7). `.cla
    - Copy the matching gate script(s) from `tooling/gate/` to each repo root;
      fill in the placeholder commands; verify `./gate.ps1` (or `./gate.sh`)
      prints `EXIT: 0` on the untouched baseline **before any feature work**.
-   - Copy `tooling/claude/` content into `<project>/.claude/` (settings hooks,
-     `/phase-review`, `/phase-done` commands). Review the permissions allowlist.
+   - Add `.gate-result.json` to each repo's `.gitignore`. The gate writes this
+     receipt so `/phase-done` can prove a *fresh, full, green* run against the
+     current working tree (`docs/process/gate-command.md`); it is local evidence
+     and must never be committed.
+   - Copy `tooling/claude/` content into `<project>/.claude/` (settings, hooks,
+     and the `/claim-feature`, `/phase-review`, `/phase-done`,
+     `/framework-doctor`, `/framework-upgrade` commands). Review the permissions
+     allowlist. The hook command ships in its Windows form — on macOS/Linux swap
+     it for `sh .claude/hooks/guard-packages.sh`.
+   - **Prove the package guard actually blocks**: run
+     `powershell -NoProfile -File .claude/hooks/verify-guard.ps1` (or
+     `sh .claude/hooks/verify-guard.sh`) from the project root. It must print
+     `GUARD: verified`. A misconfigured hook fails **open** — Claude Code treats
+     an unrunnable hook as an error rather than a block — so an unverified guard
+     is an absent guard.
+   - Copy `tooling/ci/gate.yml` to `<repo>/.github/workflows/gate.yml`, uncomment
+     your toolchain, and require the check on `main`. Do this on solo projects
+     too (see Q5).
 6. **Generate CLAUDE.md:**
    - Copy `CLAUDE.md.template` → `<project>/CLAUDE.md`, fill every `{{…}}`
      placeholder, delete sections your tier/answers exclude, and stamp the
@@ -95,7 +117,12 @@ Worktrees for parallel feature checkouts are optional (team-workflow §7). `.cla
    - If using GitHub Spec Kit, run `specify init` and adopt its
      `specs/<feature>/` layout; copy `process/templates/` review checklists into
      `specs/_templates/`. Otherwise create `specs/` manually with the same shape.
-8. **Baseline commit:**
+8. **Verify the install:**
+   - Run `/framework-doctor`. It checks the things that fail silently: unfilled
+     `{{…}}` placeholders, a gate script that never runs, a package guard that
+     does not block, a receipt that is not gitignored. Fix every FAIL before
+     feature work — an install that half-works is the worst state to build on.
+9. **Baseline commit:**
    - Commit everything as `chore: adopt sdlc-framework vX.Y.Z` before starting
      feature work, so the first `git diff --stat` against a feature is clean.
 

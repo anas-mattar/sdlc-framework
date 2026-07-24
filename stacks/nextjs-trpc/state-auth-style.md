@@ -14,7 +14,7 @@ Do not store backend list data in Redux unless the existing project already does
 
 Redux Toolkit is used for **session-scoped client state only** — the user's
 selected global scope and permissions, deliberately kept out of the NextAuth
-session (example from the WMS project: selected warehouse/legal entity):
+session (e.g. the selected organisation unit, site, or tenant scope):
 
 - Store lives in `src/lib/store.ts`.
 - Slices live in `src/lib/features/`.
@@ -53,6 +53,6 @@ Do not:
   `components/tables/base/` (Rule F11c).
 - Other feature-scoped domain components (boards, trees, panels, modal shells)
   go to `components/<feature>/`. Keep existing directory names consistent even
-  when misspelled rather than creating a parallel dir (WMS example: the
-  existing `purshase-order` directory keeps its name).
+  when misspelled rather than creating a parallel dir; record the misspelling in
+  `docs/project/gotchas.md` so nobody "fixes" it later.
 - Dropdowns shared across features go to `components/dropdowns/`.

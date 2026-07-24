@@ -56,6 +56,8 @@ front:
 | Anything product-specific | `docs/project/` (domain rules + gotchas) |
 | Claiming/starting a feature on a team | `docs/process/team-workflow.md` |
 | Running multiple AI agents/sessions | `docs/process/orchestration.md` |
+| Framework seems not to be enforcing | run `/framework-doctor` |
+| Moving to a newer framework version | run `/framework-upgrade <path-to-framework>` |
 
 ## Workflow (non-negotiable)
 
@@ -66,8 +68,11 @@ front:
 4. One feature branch per feature. <!-- multi-repo: one branch per affected repo -->
 5. Create/update `spec.md` → `plan.md` → `tasks.md` and get approval.
 6. Implement **one phase only**, then stop and ask the user to run the gate.
-7. The gate is `./gate.ps1` (or `./gate.sh`) at the repo root — it prints
-   `EXIT: <code>`. **Do not claim success until the user reports `EXIT: 0`.**
+7. The gate is `./gate.ps1` (or `./gate.sh`) at the repo root. The **user** runs
+   it; it prints `EXIT: <code>` and writes a receipt. **Do not claim success
+   until `./gate.ps1 -Verify` (or `./gate.sh --verify`) reports
+   `RECEIPT: valid`** — a pasted exit code does not count, and a receipt from
+   before your latest edit reports `RECEIPT: stale`.
 8. User checks `git diff --stat`; fix only current-phase issues; commit the phase.
 9. AI review (`/phase-review`), then human review, then merge. Never merge on AI
    review alone.

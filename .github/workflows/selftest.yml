@@ -1,0 +1,32 @@
+# The framework's own CI.
+#
+# Runs `tests/run-all.sh` -- the exact script a developer runs locally, per the
+# framework's own rule that CI must not have a separate command chain
+# (process/team-workflow.md section 3).
+#
+# This repo ships enforcement to other projects. Until this workflow existed, none
+# of that enforcement was itself enforced: the receipt contract and the encoding
+# rule were verified by hand, once, and nothing would have caught a regression.
+
+name: selftest
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  selftest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # release tags are required by the CHANGELOG coverage check
+
+      - name: Install YAML parser
+        run: python3 -m pip install --quiet pyyaml
+
+      # pwsh is preinstalled on ubuntu-latest, so the PowerShell parse check runs
+      # here even though it SKIPs on machines without it.
+      - name: Run self-tests
+        run: sh tests/run-all.sh

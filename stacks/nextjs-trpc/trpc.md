@@ -10,7 +10,9 @@ calls the backend REST APIs directly:
   targeting a server-side env-var base URL with its session access token; the
   shared wrapper provides Bearer auth, retry-with-backoff for GETs only
   (mutations are never retried), and per-endpoint timeouts.
-  > Example (from the WMS project): `ctx.featcher` → `WMS_API_URL`, `ctx.pomsFeatcher` → `POMS_API_URL`, both wrapping `src/utils/wmsFeatcher.ts`.
+  > Example: `ctx.<service>Fetcher` → `<SERVICE>_API_URL`, one per backend service,
+  > all wrapping a single shared fetch utility. Record this project's helper and
+  > env-var names in `docs/project/`.
 - Authorization is additionally enforced by the **backend** on every call via the project's permission service; the frontend permission checks are UX hints.
 - The browser never holds the backend tokens; tRPC procedures run server-side.
 

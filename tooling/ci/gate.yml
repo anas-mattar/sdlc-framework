@@ -1,0 +1,53 @@
+# CI gate — the mechanical backstop.
+#
+# Copy to <repo>/.github/workflows/gate.yml, then uncomment the toolchain block for
+# your stack. Keep exactly ONE toolchain active per repo.
+#
+# This runs the repository's own `gate.sh` — the same script the developer runs
+# locally, so there is no separate CI command chain to drift out of sync
+# (`docs/process/team-workflow.md` §3).
+#
+# WHY THIS MATTERS ON SOLO PROJECTS: the local gate is user-run and its receipt is
+# local evidence. CI is the only check that is not run by the party being checked.
+# On a team, peer review is a second line of defence; solo, this file is the only
+# one. Fifteen lines of YAML is the cheapest guarantee in the framework.
+#
+# After adding this, turn on branch protection for `main` and mark the `gate` check
+# as required — an unenforced check is decoration.
+
+name: gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- toolchain: keep ONE of these ---------------------------------------
+      # Node / Next.js:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: corepack enable && yarn install --immutable
+
+      # .NET:
+      # - uses: actions/setup-dotnet@v4
+      #   with:
+      #     dotnet-version: '8.0.x'
+      # - name: Restore
+      #   run: dotnet restore
+      # -----------------------------------------------------------------------
+
+      - name: Run the gate
+        run: |
+          chmod +x ./gate.sh
+          ./gate.sh
+        # gate.sh prints `EXIT: <code>` and exits with it, so a non-zero gate fails
+        # the job. Do not add `continue-on-error` — that turns the gate into a
+        # notification, and the framework's whole premise is that it is a gate.

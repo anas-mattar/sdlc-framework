@@ -5,16 +5,19 @@ A reusable, controlled-delivery framework for building applications with Claude 
 
 The core methodology:
 
-> **spec → plan → tasks → one phase at a time → gate with user-confirmed exit code →
+> **spec → plan → tasks → one phase at a time → user-run gate proven by a receipt →
 > AI review → human review → merge.**
 
-Supported by three ideas most teams never formalize:
+Supported by four ideas most teams never formalize:
 
 1. **Source-of-truth priority with conflict rules** — artifacts are ranked; on
    conflict, stop and report instead of silently choosing.
 2. **Prototype screenshots as UI authority** — when a prototype exists, the AI never
    invents a layout.
 3. **Numbered rules** — every rule has an ID (B1, DB4, F12…) so reviews can cite them.
+4. **Gate receipts** — the gate writes a fingerprint of the exact tree it verified,
+   so "it passed" is evidence an AI can check and cannot fabricate, rather than a
+   number someone transcribed (`process/gate-command.md`).
 
 ## The Three-Layer Model
 
@@ -35,6 +38,7 @@ layers 1 or 2.
 ```
 sdlc-framework/
 ├── VERSION                    # framework version — stamp it into consuming projects
+├── CHANGELOG.md               # what changed + what each project must re-copy
 ├── README.md                  # this file
 ├── SETUP.md                   # 6-question guided setup for a new project
 ├── ADOPTION.md                # adopting in an EXISTING project (governs new work only)
@@ -58,8 +62,14 @@ sdlc-framework/
 │   ├── dotnet-api/            # ASP.NET Core Web API + EF Core + SQL Server
 │   └── nextjs-trpc/           # Next.js App Router + tRPC + NextAuth + shadcn/ui
 └── tooling/                   # ships BEHAVIOR, not prose — copy alongside the docs
-    ├── gate/                  # gate scripts (single command, prints EXIT: <code>)
-    └── claude/                # settings template, hooks, slash commands
+    ├── gate/                  # gate scripts (one command, prints EXIT: + writes a receipt)
+    ├── ci/                    # gate.yml — the mechanical backstop, solo projects included
+    ├── claude/                # settings template, hooks, slash commands
+    └── project-docs/          # LAYER 3 skeletons (gotchas, domain rules)
+tests/                         # the framework's own regression tests
+    run-all.sh                 #   the framework's own gate -- CI runs this exact script
+    framework-checks.sh        #   static consistency (encoding, syntax, links, layers)
+    receipt-contract.sh        #   the gate receipt contract, both directions
 ```
 
 ## Installed Layout (in a consuming project)
@@ -71,6 +81,8 @@ inside the docs assume this layout:
 <project>/
 ├── CLAUDE.md                  # generated from CLAUDE.md.template
 ├── gate.ps1 / gate.sh         # from tooling/gate (per repo, at repo root)
+├── .gate-result.json          # gate receipt — GITIGNORED, never committed
+├── .github/workflows/gate.yml # from tooling/ci (per repo)
 ├── .claude/                   # from tooling/claude (settings, hooks, commands)
 ├── docs/
 │   ├── process/               # ← process/
@@ -93,6 +105,7 @@ mistake cost?**
 | | Small (solo tool, prototype) | Medium (production app, 1–3 devs) | Large (multi-repo, multi-team) |
 |---|---|---|---|
 | CLAUDE.md + gate script + conflict rules | ✅ | ✅ | ✅ |
+| CI gate check on PRs (`tooling/ci/`) | ✅ | ✅ | ✅ |
 | Spec docs | single `spec.md`, tasks inline | spec + plan + tasks | full set incl. contracts, rollback |
 | Phased implementation, gate per phase | ❌ gate per feature | ✅ | ✅ |
 | AI review / human review | AI only | ✅ both | ✅ both |
@@ -111,6 +124,30 @@ mistake cost?**
   copy silently diverge — that is how five projects end up with five different gates.
 - `VERSION` follows semver: patch = wording fixes, minor = new rules/modules,
   major = process changes that alter how phases are gated or reviewed.
+- **Every bump gets a `CHANGELOG.md` entry saying what a consuming project must
+  re-copy**, and a git tag (`v1.9.0`). Upstream-first only works if downstream has
+  a way to follow: without the changelog a project cannot tell what changed, and
+  without the tag no tool can distinguish a legitimate upgrade from local drift.
+- Downstream, `/framework-upgrade <path-to-this-repo>` walks that changelog,
+  reports which local edits an upgrade would overwrite, and stops for approval.
+  `/framework-doctor` checks an install is intact.
+
+## Working on the Framework Itself
+
+Run `sh tests/run-all.sh` before committing. CI runs that same script — the rule
+this framework imposes on consuming projects applies to the framework too.
+
+The suite covers the things that fail silently: `.ps1` files must stay ASCII-only
+(Windows PowerShell 5.1 reads UTF-8-without-BOM as ANSI, and a dead hook fails
+*open*), shell and PowerShell must parse, JSON/YAML must be valid, every git tag
+needs a `CHANGELOG.md` entry, internal links must resolve, and the gate receipt
+contract must hold in both directions.
+
+**Layer discipline is enforced, not just asserted.** Layers 1 and 2 carried the
+original project's vocabulary for twelve releases — a mandatory frontend checklist
+told every project to call `ctx.featcher`. They are now generic, the baseline is
+**zero**, and any reintroduction fails the build. When you fork this framework, add
+your own product's terms to the pattern in `tests/framework-checks.sh`.
 
 ## Design Principles
 

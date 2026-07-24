@@ -25,7 +25,7 @@ the phase's review notes; any FAIL blocks the phase.
 - [ ] Client data access uses `api.<router>.<procedure>` hooks; mutations
       invalidate/refetch affected queries via `api.useUtils()`.
 - [ ] tRPC procedures validate input with Zod and call the injected backend
-      fetch helper(s) on `ctx` (WMS example: `ctx.featcher` / `ctx.pomsFeatcher`);
+      fetch helper(s) on `ctx` (one per backend service, e.g. `ctx.<service>Fetcher`);
       anything requiring a session uses `protectedProcedure`.
 
 ## Forms (`docs/stack-frontend/forms.md`)
@@ -54,7 +54,8 @@ the phase's review notes; any FAIL blocks the phase.
       (Redux holds only session-scoped state: the project's global scope
       selections and permissions).
 - [ ] Permission gating uses the project's permission hooks/components as UX
-      hints; writes rely on backend enforcement (WMS example: `useHasPermission`/`RequirePermission`).
+      hints; writes rely on backend enforcement (e.g. a `useHasPermission` hook and
+      a `RequirePermission` wrapper component).
 - [ ] Tailwind utilities + `cn()`; theme CSS variables from `styles/globals.css`;
       no hardcoded hex colors; layout matches screenshots when they exist.
 
