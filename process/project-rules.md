@@ -10,13 +10,23 @@ All AI sessions start from the repository root that contains `CLAUDE.md` (for mu
 
 ## Spec First
 
-Implementation starts only after:
-- `spec.md` defines business behavior.
-- `plan.md` defines technical approach.
-- `tasks.md` splits execution into small phases.
-- Screenshots are placed in `specs/[feature-name]/screenshots/` when UI is involved.
+Implementation starts only after the feature's spec artifacts exist and are
+approved. Which artifacts, and how work is gated, follows the **scope tier**
+recorded in `CLAUDE.md`:
+
+| | Small | Medium / Large |
+|---|---|---|
+| Required before implementation | `spec.md` (with the task list inline) | `spec.md`, `plan.md`, `tasks.md` |
+| Gate granularity | once per feature | once per phase |
+| Review | AI review + developer acceptance | AI review + human review |
+
+In every tier: screenshots are placed in `specs/[feature-name]/screenshots/` when
+UI is involved, and implementation never starts from an unapproved spec.
 
 ## One Phase Only
+
+*(Medium and Large tiers. Small-tier features are implemented and gated as a
+single unit — the rules below then apply once, to the feature.)*
 
 The AI may implement only the current approved phase.
 
@@ -48,4 +58,6 @@ git commit -m "feat([feature-name]): complete phase [phase-number]"
 
 ## Review Rule
 
-AI review is not enough. Human review is required before merge.
+AI review is not enough. A **human** approves before merge, in every tier — a peer
+other than the owner on a team, the developer's own acceptance review when solo.
+Never the AI. See `docs/process/definition-of-done.md` item 6.

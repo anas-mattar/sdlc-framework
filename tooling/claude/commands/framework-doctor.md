@@ -17,6 +17,15 @@ Report each as PASS / FAIL / N/A with the evidence that decided it.
 `CLAUDE.md` contains a `Framework: sdlc-framework vX.Y.Z` line. Without it,
 `/framework-upgrade` cannot tell what to upgrade from.
 
+### 1a. Scope tier and team size recorded
+
+`CLAUDE.md` contains a `Scope tier:` line (`Small` / `Medium` / `Large`) and a
+`Developers:` line (`solo` / `team`). `process/project-rules.md`,
+`process/definition-of-done.md`, and `/phase-done` all read these to decide which
+spec artifacts a feature requires and whether human review means peer review or
+the developer's own acceptance review. Missing or unfilled is a FAIL: the rules
+then have no way to resolve, and every check falls back to the strictest reading.
+
 ### 2. No unfilled placeholders
 
 Search `CLAUDE.md` and every gate script for `{{`:

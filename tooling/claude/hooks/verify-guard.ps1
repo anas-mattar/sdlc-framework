@@ -73,10 +73,24 @@ Test-Guard "package.json"             "package.json"             2
 Test-Guard "yarn.lock"                "yarn.lock"                2
 Test-Guard "Api.csproj"               "src/Api/Api.csproj"       2
 Test-Guard "Directory.Packages.props" "Directory.Packages.props" 2
+# Ecosystems the framework ships no stack rules for. The guard covers them
+# anyway: a project whose manifests are unguarded gets no warning that the rule
+# is not being enforced, it just silently is not.
+Test-Guard "pyproject.toml"           "pyproject.toml"           2
+Test-Guard "requirements-dev.txt"     "requirements-dev.txt"     2
+Test-Guard "go.mod"                   "go.mod"                   2
+Test-Guard "Cargo.toml"               "Cargo.toml"               2
+Test-Guard "Gemfile"                  "Gemfile"                  2
+Test-Guard "pom.xml"                  "pom.xml"                  2
+Test-Guard "composer.json"            "composer.json"            2
 
 Write-Host "ordinary paths must be ALLOWED (exit 0):"
 Test-Guard "src/app.ts"               "src/app.ts"               0
 Test-Guard "docs/process/notes.md"    "docs/process/notes.md"    0
+# Near-misses: the guard matches the basename, so neither a manifest name buried
+# in a longer filename nor a directory named after one may block.
+Test-Guard "docs/notes-package.json"  "docs/notes-package.json"  0
+Test-Guard "vendor/Gemfile/readme.md" "vendor/Gemfile/readme.md" 0
 
 if (-not $fail) {
     Write-Host "GUARD: verified -- package manifests are blocked without approval."

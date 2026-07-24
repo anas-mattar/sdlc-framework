@@ -1,0 +1,62 @@
+name: Bug report
+description: Something in the framework does not work as documented
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For a **security** issue, do not use this form — see `SECURITY.md`.
+
+  - type: input
+    id: version
+    attributes:
+      label: Framework version
+      description: The `Framework: sdlc-framework vX.Y.Z` line in your CLAUDE.md, or this repo's VERSION.
+      placeholder: "2.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: Where does it happen?
+      options:
+        - In a project that installed the framework
+        - In this framework repo itself
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Platform
+      options:
+        - Windows (PowerShell)
+        - Windows (Git Bash / WSL)
+        - macOS
+        - Linux
+        - CI only
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the exact command you ran and its output. `EXIT:` / `RECEIPT:` lines are especially useful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: /framework-doctor output
+      description: If this is an installed project, run `/framework-doctor` and paste the result. Most install problems are diagnosed by it directly.
+      render: text
+
+  - type: textarea
+    id: selftest
+    attributes:
+      label: Self-test output
+      description: If this is the framework repo, paste the output of `sh tests/run-all.sh` (or `.\tests\run-all.ps1`).
+      render: text

@@ -41,8 +41,10 @@ Otherwise skip the module.
 
 **Q5. How many developers?**
 Solo: skip the *coordination* rules in `docs/process/team-workflow.md` (ownership,
-claim commits, reviewer ≠ owner) — but **still adopt §3, "CI runs the same gate
-scripts."** The local gate is run by the developer and its receipt is local
+claim commits, reviewer ≠ owner). Human review still applies — it becomes your own
+acceptance review, completed deliberately against the human-review template rather
+than waived (`docs/process/definition-of-done.md` item 6). **Also still adopt §3,
+"CI runs the same gate scripts."** The local gate is run by the developer and its receipt is local
 evidence; CI is the only check not performed by the party being checked. A team has
 peer review as a second line of defence, and a solo project has nothing else — so
 skipping CI removes the last mechanical enforcement in the framework. Copy
@@ -64,6 +66,12 @@ Worktrees for parallel feature checkouts are optional (team-workflow §7). `.cla
 - **High** (money, inventory, compliance, external systems that sync state):
   **Large** tier — everything, including roadmap as delivery source of truth and
   rollback docs per feature.
+
+Record the answer in `CLAUDE.md` (`Scope tier:`), along with solo/team from Q5
+(`Developers:`). These two lines are not decoration: `process/project-rules.md`,
+`process/definition-of-done.md`, and the `/phase-done` command all read them to
+decide which artifacts a feature needs and what "human review" means here. An
+unfilled tier line means every rule falls back to the strictest reading.
 
 ## Install Steps
 
@@ -111,8 +119,10 @@ Worktrees for parallel feature checkouts are optional (team-workflow §7). `.cla
      too (see Q5).
 6. **Generate CLAUDE.md:**
    - Copy `CLAUDE.md.template` → `<project>/CLAUDE.md`, fill every `{{…}}`
-     placeholder, delete sections your tier/answers exclude, and stamp the
-     framework version from `VERSION`.
+     placeholder (including `{{SCOPE_TIER}}` and `{{TEAM_SIZE}}` from Q6 and Q5),
+     delete sections your tier/answers exclude, and stamp the framework version
+     from `VERSION`. `examples/minimal-node/CLAUDE.md` is a finished one to
+     compare against.
 7. **Spec scaffold:**
    - If using GitHub Spec Kit, run `specify init` and adopt its
      `specs/<feature>/` layout; copy `process/templates/` review checklists into

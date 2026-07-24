@@ -6,6 +6,11 @@
      detail lives in docs/. -->
 
 Framework: sdlc-framework v{{FRAMEWORK_VERSION}}
+Scope tier: {{SCOPE_TIER}} <!-- Small | Medium | Large — set at setup (SETUP.md Q6).
+     Small: spec.md only, gate per feature, AI review + developer acceptance.
+     Medium/Large: spec.md + plan.md + tasks.md, gate per phase, both reviews. -->
+Developers: {{TEAM_SIZE}} <!-- solo | team — decides whether human review means the
+     developer's own acceptance review or independent peer review (DoD item 6). -->
 
 Guidance for Claude Code working in this repository.
 

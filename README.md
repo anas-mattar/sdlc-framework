@@ -1,7 +1,20 @@
 # SDLC Framework
 
-A reusable, controlled-delivery framework for building applications with Claude Code
-(or any AI coding assistant). Extracted from the WMS project and generalized.
+**Claude Code-first, with tool-neutral SDLC principles.**
+
+A reusable, controlled-delivery framework for building applications with an AI
+coding assistant. The *process* — spec-first, phased delivery, gate receipts,
+layered rules, source-of-truth priority — is tool-neutral and transfers to any
+assistant. The *enforcement* currently ships for one: slash commands, hooks, the
+package guard, and the permissions template are Claude Code artifacts under
+`tooling/claude/`. On another assistant you keep the process and re-implement the
+enforcement; the gate scripts and CI workflow are plain shell/PowerShell/YAML and
+carry over unchanged.
+
+> **Status: public beta.** The process has been used in production, but the
+> packaged framework has not yet been installed by someone other than its author,
+> and no project has upgraded across a framework version yet. Expect breaking
+> changes in minor releases until v3.0. See "Support & Version Policy" below.
 
 The core methodology:
 
@@ -33,6 +46,26 @@ Everything in this framework belongs to exactly one layer:
 product, domain, or system by name, it belongs in layer 3 — never commit it to
 layers 1 or 2.
 
+### Which stacks does it work on?
+
+**Layer 1 is stack-neutral** — nothing in `process/` names a language or
+framework, and the self-tests enforce that. The workflow applies unchanged to
+Python, Go, Rust, Java, PHP, Ruby, mobile, or anything else.
+
+**Layer 2 ships rules for two stacks today** — `dotnet-api` and `nextjs-trpc`.
+That is the only stack-bound part, and `SETUP.md` Q1 expects you to add a folder
+for yours, starting from the closest existing one.
+
+The tooling sits in between: the gate scripts' receipt machinery is pure git and
+shell, with three or four stack-specific command lines to swap; `tooling/ci/gate.yml`
+needs its toolchain block replaced; and the package guard already covers 56
+manifest and lockfile patterns across every mainstream ecosystem, whether or not
+layer-2 rules exist for it — a guard that quietly ignores `go.mod` is worse than
+no guard, because it reports itself as verified.
+
+So a third stack costs one rules folder (the real work), plus a few lines in the
+gate script and CI file.
+
 ## Repository Structure
 
 ```
@@ -42,7 +75,12 @@ sdlc-framework/
 ├── README.md                  # this file
 ├── SETUP.md                   # 6-question guided setup for a new project
 ├── ADOPTION.md                # adopting in an EXISTING project (governs new work only)
+├── CONTRIBUTING.md            # how to change the framework + what the tests protect
+├── SECURITY.md                # reporting; what counts as a vulnerability here
+├── LICENSE                    # MIT
 ├── CLAUDE.md.template         # generates the consuming project's CLAUDE.md
+├── examples/
+│   └── minimal-node/          # what a Small-tier solo install actually looks like
 ├── process/                   # LAYER 1 — copy into every project
 │   ├── project-rules.md       # spec-first, one-phase-only, branch/commit/review rules
 │   ├── gate-command.md        # the gate contract (delegates to gate scripts)
@@ -68,7 +106,8 @@ sdlc-framework/
     └── project-docs/          # LAYER 3 skeletons (gotchas, domain rules)
 tests/                         # the framework's own regression tests
     run-all.sh                 #   the framework's own gate -- CI runs this exact script
-    framework-checks.sh        #   static consistency (encoding, syntax, links, layers)
+    run-all.ps1                #   Windows launcher for the same script (not a second suite)
+    framework-checks.sh        #   static consistency (encoding, syntax, links, layers, tags)
     receipt-contract.sh        #   the gate receipt contract, both directions
 ```
 
@@ -108,12 +147,26 @@ mistake cost?**
 | CI gate check on PRs (`tooling/ci/`) | ✅ | ✅ | ✅ |
 | Spec docs | single `spec.md`, tasks inline | spec + plan + tasks | full set incl. contracts, rollback |
 | Phased implementation, gate per phase | ❌ gate per feature | ✅ | ✅ |
-| AI review / human review | AI only | ✅ both | ✅ both |
+| AI review / human review | AI + developer acceptance | ✅ both | ✅ both |
 | Stack compliance checklists | ❌ | ✅ | ✅ |
 | Roadmap doc | ❌ | optional | ✅ mandatory |
 | Multi-repo wrapper | ❌ | usually ❌ | ✅ |
 
-`SETUP.md` walks you through picking a tier.
+`SETUP.md` walks you through picking a tier; the answer is recorded in the
+project's `CLAUDE.md` (`Scope tier:`), and `process/project-rules.md` and
+`process/definition-of-done.md` read from it.
+
+No tier removes the human from the loop — what varies is **who** that human is.
+On a team, review means a peer other than the feature's owner. Solo, it means the
+developer's own acceptance review, completed deliberately and separately from
+implementing. A framework that told a solo developer to find an independent
+reviewer would simply be ignored, and a rule that gets ignored trains people to
+ignore the others.
+
+> **Known gap (v2.x):** the tier model is currently expressed as conditionals
+> inside the layer-1 docs rather than generated per tier, so a Small install still
+> receives text describing Medium/Large behavior alongside its own. Executable tier
+> profiles are the headline item for the next consistency release.
 
 ## Versioning & Upstream-First Rule
 
@@ -132,10 +185,44 @@ mistake cost?**
   reports which local edits an upgrade would overwrite, and stops for approval.
   `/framework-doctor` checks an install is intact.
 
+## Support & Version Policy
+
+- **Beta.** Minor releases may contain breaking process changes until v3.0. Every
+  one is recorded in `CHANGELOG.md` with what a consuming project must re-copy.
+- **Semver**, applied to process rather than to an API: patch = wording, minor =
+  new rules/modules, major = changes to how phases are gated or reviewed.
+- **Supported version: the latest minor only.** There are no maintenance branches.
+  Upgrading is `/framework-upgrade <path-to-this-repo>`, which walks the changelog,
+  reports which local edits an upgrade would overwrite, and stops for approval.
+- **Every release is tagged** `vX.Y.Z`. Untagged versions are unreachable by
+  `/framework-upgrade` — the self-test fails a `VERSION` with no matching tag
+  unless its changelog entry is marked `(unreleased)`.
+- Security reports: `SECURITY.md` (privately — never a public issue).
+- Contributions: `CONTRIBUTING.md`. Licensed MIT.
+
+What "stable" would require, and what beta means it lacks: installation by someone
+other than the author without help, at least one project upgraded across framework
+versions, both solo and team workflows demonstrated end to end, and at least one
+non-Claude adapter. None of those are done yet — hence beta, and hence the honest
+gap notice under Scope Tiers.
+
 ## Working on the Framework Itself
 
-Run `sh tests/run-all.sh` before committing. CI runs that same script — the rule
-this framework imposes on consuming projects applies to the framework too.
+Run the self-tests before committing:
+
+```sh
+sh tests/run-all.sh          # macOS, Linux, WSL, Git Bash
+```
+
+```powershell
+.\tests\run-all.ps1          # Windows — finds Git's sh.exe and runs the same suite
+```
+
+CI runs `run-all.sh` — the rule this framework imposes on consuming projects
+applies to the framework too. The PowerShell entry point is a **launcher, not a
+second suite**: reimplementing the checks would create a second definition of "the
+framework passes", and the two would drift. It is why a Windows contributor never
+needs to reason about which command is authoritative.
 
 The suite covers the things that fail silently: `.ps1` files must stay ASCII-only
 (Windows PowerShell 5.1 reads UTF-8-without-BOM as ANSI, and a dead hook fails

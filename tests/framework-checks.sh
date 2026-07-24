@@ -22,7 +22,7 @@ meh()  { skip=$((skip + 1)); printf '  SKIP  %s\n' "$1"; }
 # the terminator". For the package-guard hook that means failing OPEN.
 echo "PowerShell encoding"
 enc_bad=""
-for f in $(find tooling -name "*.ps1"); do
+for f in $(find tooling tests -name "*.ps1"); do
     if LC_ALL=C grep -q '[^ -~	]' "$f"; then enc_bad="$enc_bad $f"; fi
 done
 if [ -z "$enc_bad" ]; then ok "all .ps1 files are ASCII-only"
@@ -40,7 +40,7 @@ else bad "shell syntax errors in:$sh_bad"; fi
 # --- 3. PowerShell syntax (only where pwsh exists) --------------------------
 if command -v pwsh >/dev/null 2>&1; then
     ps_bad=""
-    for f in $(find tooling -name "*.ps1"); do
+    for f in $(find tooling tests -name "*.ps1"); do
         pwsh -NoProfile -Command "
             \$e = \$null
             [System.Management.Automation.Language.Parser]::ParseFile('$f', [ref]\$null, [ref]\$e) | Out-Null
@@ -98,6 +98,22 @@ if grep -q "^## $v\b" CHANGELOG.md
 then ok "VERSION ($v) has a CHANGELOG entry"
 else bad "VERSION ($v) has no CHANGELOG entry"; fi
 
+# A VERSION with no matching tag is the failure mode the changelog check cannot
+# see: downstream, /framework-upgrade diffs a project's copy against the tagged
+# upstream tree, so an untagged release is invisible to every consumer -- the
+# version exists in the file and nowhere a tool can reach. Unreleased work in
+# progress is legitimate, so mark it: put `## X.Y.Z (unreleased)` in CHANGELOG.md
+# and this check stands down until the tag lands.
+if [ -n "$tags" ]; then
+    if echo "$tags" | grep -qx "v$v"; then
+        ok "VERSION ($v) has a git tag (v$v)"
+    elif grep -qiE "^## $v\b.*\(unreleased\)" CHANGELOG.md; then
+        meh "VERSION ($v) is marked unreleased -- tag it before publishing"
+    else
+        bad "VERSION ($v) has a CHANGELOG entry but no git tag v$v -- /framework-upgrade cannot reach it"
+    fi
+fi
+
 # --- 6. Internal markdown links resolve -------------------------------------
 echo "Cross-references"
 linkfile=$(mktemp)
@@ -138,6 +154,85 @@ else
     bad "layer 1/2 product references rose to $count (baseline $BASELINE)"
     grep -rniE '\bwms\b|dpointernational|featcher|purshase|\bpoms\b' process/ stacks/ modules/ 2>/dev/null | sed 's/^/          /'
 fi
+
+# --- 8. No dependency on an unshipped constitution (ratchet) ----------------
+# Layers 1 and 2 used to cite constitution principles (I, X, XVI, XVII) as the
+# authority behind the Definition of Done and the review templates -- a document
+# this framework never ships and never installs. A consuming project therefore
+# received rules deferring to an authority that did not exist, and the DoD said
+# that missing document PREVAILED over itself. The rules are now self-contained.
+#
+# Referring to a project's own governing document as OPTIONAL context is fine;
+# citing a principle NUMBER is not, because a number is only meaningful against a
+# specific document the framework cannot see. So the pattern targets the numerals.
+echo "Self-contained authority"
+CONST_BASELINE=0
+const_count=$(grep -rnE 'constitution[[:space:]]+\**[IVX]+\b|\bprinciple[[:space:]]+\**[IVX]+\b' \
+    process/ stacks/ modules/ tooling/ 2>/dev/null | wc -l | tr -d ' ')
+if [ "$const_count" -le "$CONST_BASELINE" ]; then
+    ok "citations of unshipped constitution principles: $const_count (baseline $CONST_BASELINE)"
+else
+    bad "layer 1/2 cites constitution principle numbers ($const_count) -- the framework ships no constitution"
+    grep -rnE 'constitution[[:space:]]+\**[IVX]+\b|\bprinciple[[:space:]]+\**[IVX]+\b' \
+        process/ stacks/ modules/ tooling/ 2>/dev/null | sed 's/^/          /'
+fi
+
+# --- 9. The example install is actually installed ---------------------------
+# examples/ exists to show what a finished install looks like. An example with a
+# live {{PLACEHOLDER}} in it teaches the single mistake /framework-doctor exists to
+# catch (check 2), so the example is held to the standard it demonstrates.
+echo "Example install"
+if [ -d examples ]; then
+    ex_bad=$(grep -rl '{{[A-Z_]*}}' examples/ 2>/dev/null)
+    if [ -z "$ex_bad" ]; then ok "no unfilled placeholders in examples/"
+    else bad "unfilled placeholders in:"; echo "$ex_bad" | sed 's/^/          /'; fi
+else
+    meh "example install (examples/ not present)"
+fi
+
+# --- 10. The two package guards agree -------------------------------------
+# The guard is implemented twice, once per platform. Nothing forces the two
+# pattern lists to match, and a manifest guarded on Windows but not on macOS is
+# the worst kind of bug: it works for whoever wrote it. Both files delimit their
+# list with GUARDED-MANIFESTS-BEGIN/END so it can be compared mechanically.
+echo "Package guard parity"
+extract_block() { sed -n '/GUARDED-MANIFESTS-BEGIN/,/GUARDED-MANIFESTS-END/p' "$1"; }
+sh_pats=$(extract_block tooling/claude/hooks/guard-packages.sh \
+    | sed '1d;$d' | tr -d '"' | sed 's/^GUARDED=//' | tr ' \t' '\n\n' | grep -v '^$' | sort -u)
+ps_pats=$(extract_block tooling/claude/hooks/guard-packages.ps1 \
+    | grep -oE "'[^']+'" | tr -d "'" | sort -u)
+
+if [ -z "$sh_pats" ] || [ -z "$ps_pats" ]; then
+    bad "could not extract the guard pattern list from one or both hooks"
+elif [ "$sh_pats" = "$ps_pats" ]; then
+    ok "guard-packages.sh and .ps1 guard the same $(echo "$sh_pats" | wc -l | tr -d ' ') patterns"
+else
+    bad "guard-packages.sh and .ps1 guard different patterns:"
+    printf '%s\n' "$sh_pats" > "${TMPDIR:-/tmp}/gp-sh.$$"
+    printf '%s\n' "$ps_pats" > "${TMPDIR:-/tmp}/gp-ps.$$"
+    diff "${TMPDIR:-/tmp}/gp-sh.$$" "${TMPDIR:-/tmp}/gp-ps.$$" | sed 's/^/          /'
+    rm -f "${TMPDIR:-/tmp}/gp-sh.$$" "${TMPDIR:-/tmp}/gp-ps.$$"
+fi
+
+# --- 11. The shell guard actually blocks ------------------------------------
+# verify-guard.* proves the guard works in an INSTALLED project, against the
+# command configured there. This proves the shipped script itself blocks and
+# allows the right paths, before it is ever installed anywhere. A guard failing
+# open is the one defect that hides itself.
+echo "Package guard behavior"
+guard_case() {  # guard_case <file_path> <expected_exit>
+    printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$1" \
+        | sh tooling/claude/hooks/guard-packages.sh >/dev/null 2>&1
+    [ "$?" = "$2" ]
+}
+g_bad=""
+for c in "package.json:2" "src/Api/Api.csproj:2" "pyproject.toml:2" "go.mod:2" \
+         "Cargo.toml:2" "Gemfile:2" "requirements-dev.txt:2" \
+         "src/app.ts:0" "docs/notes-package.json:0" "vendor/Gemfile/readme.md:0"; do
+    guard_case "${c%:*}" "${c##*:}" || g_bad="$g_bad ${c%:*}"
+done
+if [ -z "$g_bad" ]; then ok "guard blocks manifests and allows ordinary files (10 cases)"
+else bad "guard gave the wrong answer for:$g_bad"; fi
 
 echo
 echo "passed=$pass failed=$fail skipped=$skip"

@@ -1,0 +1,60 @@
+name: Rule or process proposal
+description: Propose a new rule, process change, or stack rule set
+labels: ["proposal"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        The bar for a new layer-1 rule is deliberately high: every rule added is a
+        rule every consuming project must follow forever, and this framework's
+        biggest failure mode is becoming a pile of rules nobody reads.
+
+        A proposal that replaces prose with enforcement (a script, hook, or check)
+        clears that bar much more easily than one that adds a paragraph.
+
+  - type: dropdown
+    id: layer
+    attributes:
+      label: Which layer?
+      options:
+        - Layer 1 — process (applies to every project, every stack)
+        - Layer 2 — stack rules (a specific technology stack)
+        - Tooling — gate, hooks, commands, CI
+        - Not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: failure
+    attributes:
+      label: What failure does this prevent?
+      description: Describe a concrete incident or near-miss, not a principle. Rules justified only by best practice tend to be the ones that get ignored.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: The proposed rule or change
+    validations:
+      required: true
+
+  - type: dropdown
+    id: enforceable
+    attributes:
+      label: Can it be enforced mechanically?
+      description: A check in tests/, a gate step, a hook, or a slash command.
+      options:
+        - "Yes — and I can write the check"
+        - "Yes in principle, but I do not know how"
+        - "No — it needs human judgement"
+    validations:
+      required: true
+
+  - type: textarea
+    id: cost
+    attributes:
+      label: What does it cost the developer following it?
+      description: Time per feature, per phase, or per PR. Be honest — cost is what decides whether a rule survives contact with a deadline.
+    validations:
+      required: true

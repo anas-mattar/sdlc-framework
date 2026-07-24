@@ -43,10 +43,24 @@ check "package.json"              "package.json"                2
 check "yarn.lock"                 "yarn.lock"                   2
 check "Api.csproj"                "src/Api/Api.csproj"          2
 check "Directory.Packages.props"  "Directory.Packages.props"    2
+# Ecosystems the framework ships no stack rules for. The guard covers them
+# anyway: a project whose manifests are unguarded gets no warning that the rule
+# is not being enforced, it just silently is not.
+check "pyproject.toml"            "pyproject.toml"              2
+check "requirements-dev.txt"      "requirements-dev.txt"        2
+check "go.mod"                    "go.mod"                      2
+check "Cargo.toml"                "Cargo.toml"                  2
+check "Gemfile"                   "Gemfile"                     2
+check "pom.xml"                   "pom.xml"                     2
+check "composer.json"             "composer.json"               2
 
 echo "ordinary paths must be ALLOWED (exit 0):"
 check "src/app.ts"                "src/app.ts"                  0
 check "docs/process/notes.md"     "docs/process/notes.md"       0
+# Near-misses: the guard matches the basename, so neither a manifest name buried
+# in a longer filename nor a directory named after one may block.
+check "docs/notes-package.json"   "docs/notes-package.json"     0
+check "vendor/Gemfile/readme.md"  "vendor/Gemfile/readme.md"    0
 
 if [ $fail -eq 0 ]; then
     echo "GUARD: verified — package manifests are blocked without approval."

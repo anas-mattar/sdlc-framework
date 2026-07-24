@@ -1,27 +1,30 @@
 # Human PR Review — [feature-name] / Phase [N]
 
 > Copy this template to `specs/feature/NNN-<name>/human-pr-review.md` and complete one
-> section per phase. This is Definition of Done item 6 and constitution **XVI**:
-> AI review alone is insufficient — a change MUST NOT be merged until a human
-> reviewer approves it. Constitution numerals below refer to the consuming
-> project's constitution.
+> section per phase. This is Definition of Done item 6: AI review alone is
+> insufficient — a change MUST NOT be merged until a human approves it.
+>
+> **Team:** the reviewer is a developer other than the feature's owner.
+> **Solo:** the developer completes this checklist as their own acceptance review —
+> a separate, deliberate act from implementing, never delegated to the AI. Record
+> "self (solo project)" as the reviewer so the record stays honest.
 
 | Field | Value |
 |-------|-------|
 | Feature | `feature/[NNN-name]` |
 | Phase | [N] — [phase title from tasks.md] |
 | Repositories / PRs | [{{BACKEND_DIR}} PR #, {{FRONTEND_DIR}} PR #, specs PR #] |
-| Reviewer (human) | [name] |
+| Reviewer (human) | [name — or "self (solo project)"] |
 | Review date | [YYYY-MM-DD] |
 | AI review verdict | PASS / FAIL (see `ai-code-review.md`) |
-| Gate result | EXIT: [code] — run by [user], [YYYY-MM-DD] |
+| Gate result | RECEIPT: valid — run by [user], [YYYY-MM-DD] |
 | Decision | APPROVED / CHANGES REQUESTED / REJECTED |
 
 ## Preconditions (verify before reviewing)
 
 - [ ] AI review (`ai-code-review.md`) is complete for this phase with no open blockers.
-- [ ] The gate was run **by the user** and the confirmed exit code is 0
-      (constitution XVII — AI claims of success without this do not count).
+- [ ] The gate was run **by the user** and `--verify` reports `RECEIPT: valid`
+      (AI claims of success without this do not count).
 - [ ] `git diff --stat` output is attached/linked below.
 
 ## 1. Actual UI vs Screenshots
@@ -47,7 +50,7 @@ Notes:
 
 - [ ] Quantities, amounts, and state transitions are correct across the tested flows.
 - [ ] Posted transactional records are never edited or deleted — corrections are
-      reversal/adjustment only (constitution X).
+      reversal/adjustment only (where the domain has posted/immutable records).
 - [ ] Records are correctly scoped (e.g. per site / legal entity, where the domain
       requires it).
 
@@ -77,7 +80,7 @@ Notes:
 
 - [ ] Read the full diff in each repository — not just the summary.
 - [ ] `git diff --stat` shows only files this phase intended to change; unrelated
-      changes were reverted (constitution XVII).
+      changes were reverted (Definition of Done item 4).
 
 `git diff --stat` output:
 

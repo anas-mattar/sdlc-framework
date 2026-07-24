@@ -26,6 +26,89 @@ including detection of local edits that an upgrade would overwrite.
 
 ---
 
+## 2.1.0 (unreleased)
+
+**Consistency release.** No new rules — this removes places where the framework
+contradicted itself or depended on something it never shipped. Prompted by an
+external review of v2.0.0.
+
+- **The Definition of Done is now authoritative on its own.** It previously cited
+  constitution principles I, X, XVI and XVII as its authority, and stated that the
+  constitution *prevailed* over it — but the framework never shipped or installed
+  such a document. Consuming projects were receiving rules that deferred to an
+  authority that did not exist. All principle numerals are gone from layers 1 and
+  2; `tests/framework-checks.sh` now fails if any come back.
+- **Human review is honest about solo projects.** Item 6 still requires a human to
+  approve before merge, in every tier — but who that human is now depends on the
+  project: an independent peer on a team, the developer's own deliberate
+  acceptance review when solo. The old text demanded an independent reviewer that a
+  solo project cannot produce, which trains people to ignore rules.
+- **Scope tiers reach the rules that implement them.** `project-rules.md` and
+  `definition-of-done.md` are now tier-aware: Small requires `spec.md` only and
+  gates per feature; Medium/Large require `spec.md` + `plan.md` + `tasks.md` and
+  gate per phase. Previously `README.md` promised Small tier one thing and the
+  installed rules demanded another. The tier and team size are now recorded in
+  `CLAUDE.md`. *(Partial: the rules are conditional, not generated per tier —
+  executable tier profiles remain open. See README → Scope Tiers, Known gap.)*
+- **Feature numbering defaults to tracker issue IDs** on teams, with the claim
+  commit as the alternative for projects without a tracker. The claim commit
+  requires a direct push to `main`, which many organizations forbid outright — it
+  could not be the default.
+- **One feature = one accountable owner**, not one person. A feature may have
+  contributors if `spec.md` declares the boundary between them. One branch per
+  feature is unchanged: the gate and the scope check both operate on a single diff.
+- **Windows self-test entry point** — `tests/run-all.ps1` locates the `sh.exe` that
+  Git for Windows already installs and runs `run-all.sh`. A launcher, not a second
+  suite; there is still exactly one definition of "the framework passes".
+- **v2.0.0 is tagged.** It was released with a `VERSION` bump and a changelog entry
+  but no git tag, which made it unreachable by `/framework-upgrade` for every clone
+  but the author's. A new self-test fails a `VERSION` with no matching tag, unless
+  its changelog heading is marked `(unreleased)`.
+- **Public-repository essentials** — `LICENSE` (MIT), `CONTRIBUTING.md`,
+  `SECURITY.md`, issue and PR templates, and `examples/minimal-node/`: a real
+  Small-tier solo install, checked by the self-tests for unfilled placeholders.
+- **The package guard covers every mainstream ecosystem, not just the two with
+  shipped stack rules.** It previously matched only `package.json`, the JS
+  lockfiles, and the .NET manifests — so on a Python, Go, Rust, Java, PHP, Ruby,
+  Swift, Dart or Elixir project it installed cleanly, passed `verify-guard`,
+  reported `GUARD: verified`, and then permitted every dependency change
+  silently. The rule appeared enforced while enforcing nothing, which is the
+  framework's stated worst failure mode. Now 56 patterns across all of those
+  ecosystems, matched on the basename so `docs/notes-package.json` and a
+  directory named `Gemfile/` no longer false-positive. Two new self-tests: the
+  `.sh` and `.ps1` pattern lists must be identical (they are maintained
+  separately and nothing else forced them to agree), and the shipped shell guard
+  must block and allow the right paths before it is installed anywhere.
+- **Positioning corrected** — "Claude Code-first, with tool-neutral SDLC
+  principles", labelled a public beta. The process is portable; the enforcement
+  (`.claude/` commands, hooks, permissions) is not, and claiming otherwise set up
+  users of other assistants to be disappointed.
+
+**Upgrade actions**
+
+| File | Action |
+|---|---|
+| `process/definition-of-done.md` | **Copy** → `docs/process/` |
+| `process/project-rules.md` | **Copy** → `docs/process/` |
+| `process/review-process.md` | **Copy** → `docs/process/` |
+| `process/branch-strategy.md` | **Copy** → `docs/process/` |
+| `process/team-workflow.md` | **Copy** → `docs/process/` |
+| `process/templates/*.md` | **Copy** → `specs/_templates/` |
+| `tooling/claude/commands/claim-feature.md` | **Copy** → `.claude/commands/` |
+| `tooling/claude/hooks/guard-packages.{sh,ps1}` | **Copy** → `.claude/hooks/` — then re-run `verify-guard` |
+| `tooling/claude/hooks/verify-guard.{sh,ps1}` | **Copy** → `.claude/hooks/` |
+| `CLAUDE.md` | **Merge** — add the `Scope tier:` and `Developers:` lines under `Framework:` |
+| everything else | **None** — upstream only |
+
+No gate, receipt, or CI behavior changed in this release. The package guard now
+blocks strictly more than before: if your project edits a manifest this list
+newly covers, that edit needs `.claude/allow-package-changes` as JS and .NET
+manifests always did. Nothing that was blocked before is allowed now. If your project
+maintains its own constitution, nothing breaks: it simply is no longer *required*
+for the installed rules to make sense.
+
+---
+
 ## 2.0.0
 
 **Breaking — the gate contract changed.** A pasted `EXIT: 0` no longer satisfies

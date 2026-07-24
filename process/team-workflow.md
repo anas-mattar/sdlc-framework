@@ -5,14 +5,31 @@ How the framework scales from one developer to a team. Everything per-feature
 disciplines parallelize cleanly as long as ownership is exclusive. This file adds
 the coordination layer.
 
-## 1. One Feature = One Owner = One Branch
+## 1. One Feature = One Accountable Owner
 
-The unit of parallelism is the **feature**. Two developers never work in the same
-`specs/<feature>/` folder or feature branch simultaneously.
+Every feature has exactly **one owner**: the person accountable for its spec,
+its phases reaching Done, and its merge. Ownership is never shared — "we both
+own it" means nobody does.
 
-If a feature genuinely needs two people (e.g. backend + frontend), split it into
-two features with a contract between them (see rule 5) — the cross-repository
-feature rule in `docs/process/repository-strategy.md` is the template.
+Ownership is not the same as exclusivity. A feature **may** have additional
+contributors, provided the boundary between them is explicit **before** either
+starts:
+
+- **Default — split into two features.** If the work divides cleanly (e.g. backend
+  and frontend), make it two features with a merged contract between them (rule 5).
+  Each gets its own owner, branch, and phases. Prefer this: it needs no
+  coordination beyond the contract.
+- **Alternative — one feature, several contributors, declared boundaries.** When
+  splitting would be artificial, `spec.md` names the owner and lists each
+  contributor against the files or modules they will touch. Two people still never
+  edit the same file in the same phase, and phases stay serialized: one phase, one
+  gate, one `git diff --stat` that the owner can account for in full. The owner
+  runs the gate and owns the Definition of Done for every phase regardless of who
+  wrote the code.
+
+What is never negotiable is the **branch**: one feature = one branch. Contributors
+push to the owner's feature branch; they do not open parallel branches for the same
+feature, because the phase gate and the scope check both operate on a single diff.
 
 ## 2. The Roadmap Is the Assignment Board
 
@@ -28,9 +45,17 @@ feature rule in `docs/process/repository-strategy.md` is the template.
 Sequential spec numbers (`specs/feature/002-…`) race when two developers start
 features concurrently: any scheme that **computes** the next number by scanning
 existing folders hands both developers the same number. On a team, numbers are
-**allocated** instead:
+**allocated** instead. Pick ONE scheme per project:
 
-- **The claim commit is the allocator.** The same roadmap commit that sets the
+- **Default — tracker issue IDs.** If the project has an issue tracker
+  (GitHub/GitLab/Jira), create the issue first and use its number as the spec
+  number (`specs/feature/142-…`). The tracker is already an atomic allocator: zero
+  coordination, no push race, nothing to explain to a new developer, and every spec
+  folder links to its ticket. Assigning yourself the issue **is** the claim. It also
+  works under branch protection that forbids direct pushes to `main`, which many
+  organizations mandate. Numbers will be sparse and non-contiguous — cosmetic only.
+- **Alternative — the claim commit.** For projects with no tracker (or where specs
+  live apart from it), the same roadmap commit that sets the
   owner (rule 2) also assigns the next free number. The `/claim-feature` command
   (`tooling/claude/commands/`) executes this protocol deterministically — prefer
   it over following the steps from memory. Order is strict:
@@ -44,36 +69,32 @@ existing folders hands both developers the same number. On a team, numbers are
   the collision surfaces at the cheapest moment: before anything references the
   number. Hence the strict order: **claim → push → then branch and spec**,
   never the reverse.
-- **The claim commit goes directly to main — the one exemption from the review
-  gate.** A claim held on a branch or in an open PR is invisible to other
-  developers' pulls, so the lock would not exist exactly when it is needed. The
-  exemption is safe because a claim commit contains only the one roadmap line
-  (number + feature name + owner) — no code, no spec content. Everything after
-  it follows the normal process. On multi-repo projects this targets the
-  wrapper/specs repo's main; code-repo branch protection is unaffected. If even
-  the specs repo forbids direct pushes to main, use the tracker-ID scheme
-  instead — assigning yourself the issue IS the claim, with the same atomic,
-  immediately-visible lock.
+  This scheme requires the claim commit to go **directly to main — the one
+  exemption from the review gate.** A claim held on a branch or in an open PR is
+  invisible to other developers' pulls, so the lock would not exist exactly when
+  it is needed. The exemption is safe because a claim commit contains only the one
+  roadmap line (number + feature name + owner) — no code, no spec content.
+  Everything after it follows the normal process. On multi-repo projects this
+  targets the wrapper/specs repo's main; code-repo branch protection is
+  unaffected. **If your organization forbids direct pushes to main anywhere —
+  and many do — this scheme is not available to you: use tracker IDs.**
+
+The rules below apply to whichever scheme you picked:
+
 - **The number space is project-wide — one sequence, even with multiple
   roadmaps.** Numbers identify entries in shared namespaces (`specs/feature/`
   folders, branches, commits), so per-roadmap sequences would collide. "Next
   free number" means the highest across **all** roadmaps and existing spec
   folders, plus one (the roadmap index in `docs/roadmap/README.md` makes this a
-  quick check). Stream grouping lives in the slug (`014-grn-annex`,
-  `015-putaway-zones`), never in the number. On multi-roadmap projects the
-  tracker-ID scheme below is especially attractive — issue numbers are already
-  one global atomic sequence.
+  quick check). Stream grouping lives in the slug (`014-annex-receipts`,
+  `015-putaway-zones`), never in the number. On multi-roadmap projects tracker IDs
+  are especially attractive — issue numbers are already one global atomic sequence.
 - **The number is identity: allocated once, never recycled, never compacted.**
   Branches, folders, and commits reference it. A cancelled feature's number
   stays burned; gaps are fine — numbers are identifiers, not counters.
 - **Scaffold auto-numbering is advisory.** Tools that compute the next number
   from existing directories (e.g. Spec Kit's create-new-feature script) offer a
-  suggestion; the roadmap allocation wins on conflict.
-- **Sanctioned alternative — tracker issue IDs.** On issue-driven projects
-  (GitHub/GitLab), create the issue first and use its number as the spec number
-  (`specs/feature/142-…`). The tracker is an atomic allocator: zero
-  coordination, and every spec folder links to its ticket. Numbers will be
-  sparse and non-contiguous — cosmetic only. Pick ONE scheme per project.
+  suggestion; the allocated number wins on conflict.
 
 Solo developers are unaffected: with one writer, computed numbering is safe.
 

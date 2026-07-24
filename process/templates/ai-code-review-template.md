@@ -2,8 +2,7 @@
 
 > Copy this template to `specs/feature/NNN-<name>/ai-code-review.md` and complete one
 > section per phase. This is Definition of Done item 5. AI review alone never
-> authorizes a merge — human review (constitution XVI) follows it. Constitution
-> numerals below refer to the consuming project's constitution.
+> authorizes a merge — human review (item 6) follows it.
 
 | Field | Value |
 |-------|-------|

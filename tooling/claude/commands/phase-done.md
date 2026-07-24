@@ -24,8 +24,12 @@ result, and it can never change what builds.
 Check each item and collect evidence. The numbering matches
 `docs/process/definition-of-done.md`:
 
-1. **Specification approved** — `spec.md`, `plan.md`, `tasks.md` exist for the
-   feature and the current phase is marked approved in `tasks.md`.
+1. **Specification approved** — the artifacts this project's scope tier requires
+   exist and are approved. Read the `Scope tier:` line in `CLAUDE.md`:
+   Medium/Large → `spec.md`, `plan.md`, `tasks.md`, with the current phase marked
+   approved in `tasks.md`; Small → `spec.md` alone, marked approved. Do not demand
+   a `plan.md` from a Small-tier project, and do not accept its absence from a
+   Medium/Large one.
 2. **Single-phase scope** — `git diff --stat` shows only files belonging to the
    approved phase.
 3. **Gate passed** — run `./gate.ps1 -Verify` (or `./gate.sh --verify`) in each
@@ -42,7 +46,12 @@ Check each item and collect evidence. The numbering matches
 5. **AI review complete** — `specs/<feature>/ai-code-review.md` contains a dated
    PASS for this phase (run `/phase-review` if missing).
 6. **Human review** — required before MERGE (not before commit). Confirm the user
-   knows merge is blocked until a human reviewer approves.
+   knows merge is blocked until a human approves. Read the `Developers:` line in
+   `CLAUDE.md`: on a **team**, that human must be someone other than the feature's
+   owner; **solo**, it is the developer's own acceptance review against
+   `specs/_templates/human-pr-review-template.md` — a separate deliberate act, not
+   a formality, and never performed by you. Never report this item as satisfied on
+   your own assessment of the code.
 
 ## Verdict
 

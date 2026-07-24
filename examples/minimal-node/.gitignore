@@ -1,0 +1,17 @@
+node_modules/
+.next/
+.env*.local
+
+# The gate receipt: local evidence that a full gate passed against THIS working
+# tree. Never commit it -- a committed receipt is someone else's pass, and the
+# whole point of the mechanism is that it cannot be inherited or transcribed.
+.gate-result.json
+
+# Per-developer Claude Code settings. settings.json IS committed (it carries the
+# package guard hook and the shared permission allowlist); only the local
+# override file is ignored.
+.claude/settings.local.json
+
+# Written by the package guard when a package change is approved for the current
+# feature. Per-checkout, never shared.
+.claude/allow-package-changes

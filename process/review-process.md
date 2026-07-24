@@ -30,8 +30,10 @@ Check:
 ## Human Review
 
 AI review alone is insufficient. **Human review is required before merge**, and a
-change MUST NOT be merged until a human reviewer approves it (the project
-constitution's human-review principle, e.g. XVI).
+change MUST NOT be merged until a human approves it
+(`docs/process/definition-of-done.md` item 6). On a team that human is a peer other
+than the feature's owner; solo, it is the developer's own acceptance review — but
+it is never the AI, and never skipped.
 
 Human reviewer checks:
 - Actual UI vs screenshots
