@@ -26,7 +26,7 @@ including detection of local edits that an upgrade would overwrite.
 
 ---
 
-## 2.1.0 (unreleased)
+## 2.1.0
 
 **Consistency release.** No new rules — this removes places where the framework
 contradicted itself or depended on something it never shipped. Prompted by an
