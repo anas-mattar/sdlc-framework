@@ -26,6 +26,70 @@ including detection of local edits that an upgrade would overwrite.
 
 ---
 
+## 2.2.0
+
+**Breaking — the receipt now fingerprints requirements, and status moves to its
+own files.** Closes the last correctness gap from the v2.0.0 review.
+
+v2.0-2.1 excluded `specs/*/tasks.md` and the whole of `docs/roadmap/` from the
+receipt fingerprint, because `/phase-done` writes phase and feature status into
+them *after* the gate runs. But those files also carry **requirements**: a
+phase's task definitions, and the roadmap's scope and sequencing. So a task could
+be rewritten after the gate to match whatever was actually built, or a roadmap
+item quietly descoped, and `--verify` would still report `RECEIPT: valid`. The
+receipt claimed the code was measured against requirements that had since moved.
+
+The fix separates the two rather than choosing between them:
+
+| Path | Fingerprinted | |
+|---|---|---|
+| `specs/<feature>/status.md` | no | **new** — phase progress |
+| `specs/<feature>/tasks.md` | **yes** | was excluded — defines the phases |
+| `docs/roadmap/status.md` | no | **new** — the delivery board |
+| `docs/roadmap/` (everything else) | **yes** | was excluded — scope and sequencing |
+| `specs/*/ai-code-review.md`, `specs/*/human-pr-review.md` | no | unchanged — pure review output |
+
+Mixing mutable status into a requirements document forces a choice between a
+receipt that goes stale on every status tick and an exclusion that hides
+requirement changes. Separating them costs one small file per feature and removes
+the choice.
+
+- `/phase-done` Step A now writes `status.md` and refuses to touch `tasks.md`:
+  wanting to edit the task definitions at that point means the requirements moved
+  during implementation, which is a stop-and-report event, not paperwork.
+- **Two new self-tests.** `tests/framework-checks.sh` fails the build if any gate
+  script excludes a whole requirements artifact (the v2.0 list is rejected), and
+  if the four gate scripts stop agreeing on the exclusion list — they each claim
+  to be "identical in every gate script" and nothing enforced it, while
+  `receipt-contract.sh` only ever exercises `gate-node.sh`.
+- `tests/receipt-contract.sh` now asserts both new directions: `tasks.md` and
+  roadmap definitions MUST invalidate; the two `status.md` files MUST NOT.
+
+**Upgrade actions**
+
+| File | Action |
+|---|---|
+| `tooling/gate/gate-{node,dotnet}.{sh,ps1}` | **Merge** — replace the `RECEIPT_EXCLUDES` / `$ReceiptExcludes` block; keep your project's build commands |
+| `process/gate-command.md` | **Copy** → `docs/process/` |
+| `process/source-artifacts.md` | **Copy** → `docs/process/` |
+| `process/branch-strategy.md`, `process/team-workflow.md` | **Copy** → `docs/process/` |
+| `tooling/claude/commands/phase-done.md` | **Copy** → `.claude/commands/` |
+| `CLAUDE.md` | **Merge** — add the status-file paragraph to Source of Truth Priority |
+| **your specs and roadmap** | **Migrate** — see below |
+
+**Migration (one-time, per project).** Move phase status ticks out of each
+`specs/<feature>/tasks.md` into a new `specs/<feature>/status.md`, leaving the
+task *definitions* behind. Move the roadmap's status column into
+`docs/roadmap/status.md`, leaving scope and sequencing behind. Until you do,
+finishing a phase will invalidate the receipt it just verified — the failure is
+loud (`RECEIPT: stale`) and cannot pass silently, which is the intended direction
+for a breaking change to a control.
+
+Per `README.md` → Support & Version Policy, breaking changes in minor releases
+are expected until v3.0.
+
+---
+
 ## 2.1.0
 
 **Consistency release.** No new rules — this removes places where the framework

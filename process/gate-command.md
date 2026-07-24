@@ -42,26 +42,41 @@ Five paths are deliberately outside the fingerprint:
 
 ```
 .gate-result.json          the receipt itself
-specs/*/tasks.md           phase status
+specs/*/status.md          phase progress, written by /phase-done
 specs/*/ai-code-review.md  written by /phase-review
 specs/*/human-pr-review.md written by the human reviewer
-docs/roadmap/              feature status
+docs/roadmap/status.md     the delivery board
 ```
 
-These are process paperwork, written *around* the gate rather than built by it —
-`/phase-review` and `/phase-done` necessarily run after the gate, so fingerprinting
-their output would make a receipt go stale the instant a phase was written up. None
-of them can change what compiles or what tests do.
+These are written *around* the gate rather than built by it — `/phase-review` and
+`/phase-done` necessarily run after the gate, so fingerprinting their output would
+make a receipt go stale the instant a phase was written up.
 
-The exclusion is deliberately narrow. `spec.md`, `plan.md`, and
-`specs/*/contracts/` stay **in** the fingerprint: a contract can generate code, and
-a changed spec means the gate verified something other than what was asked for.
-`tests/receipt-contract.sh` asserts both directions — that paperwork does not
-invalidate a receipt and that spec, plan, and contract changes do. Widening the
-exclusion list breaks that test, which is the point.
+**The line is status versus requirements, not paperwork versus code.** Everything
+that defines *what the work is* stays in the fingerprint, including files that are
+themselves process artifacts:
+
+| In the fingerprint | Why |
+|---|---|
+| `spec.md`, `plan.md` | A changed spec means the gate verified something other than what was asked for |
+| `tasks.md` | It defines what each phase must do. If it were excluded, a phase's requirements could be rewritten after the gate to match whatever was built, and the receipt would still read `valid` |
+| `docs/roadmap/` (except `status.md`) | The roadmap owns scope and sequencing — descoping an item after the gate is a change to the delivery record, not a status tick |
+| `specs/*/contracts/` | A contract can generate code |
+
+This is why status lives in its own file rather than as ticks inside `tasks.md`.
+Mixing mutable status into a requirements document forces a choice between a
+receipt that goes stale on every status update and an exclusion that hides
+requirement changes. Separating them costs one small file and removes the choice.
+
+`tests/receipt-contract.sh` asserts both directions — that status does not
+invalidate a receipt, and that `spec.md`, `plan.md`, `tasks.md`, roadmap
+definitions, and contracts do. `tests/framework-checks.sh` additionally fails the
+build if any gate script excludes a whole requirements artifact, or if the four
+gate scripts stop agreeing on the list.
 
 > A receipt promises: *the code the gate compiled and tested is the code in front
-> of you.* It does not promise the paperwork is unchanged.
+> of you, and the requirements it was measured against have not moved since.* It
+> does not promise the status boards are unchanged.
 
 Add `.gate-result.json` to `.gitignore`. The receipt is local evidence of a local
 run; a committed receipt is a receipt someone can forge in a pull request. CI does

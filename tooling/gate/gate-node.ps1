@@ -31,18 +31,27 @@ $Steps = @(
 # content-based, not HEAD-based. The receipt itself is excluded so it never alters
 # the fingerprint it is stored in.
 #
-# Process artifacts are excluded. These are written AROUND the gate, not built by
-# it: phase/roadmap status and review output are produced by /phase-review and
-# /phase-done, which necessarily run after the gate. Fingerprinting them would make
-# the receipt go stale the moment a phase is written up. They are never build
-# inputs. Everything else stays in -- including spec.md, plan.md and
-# specs/*/contracts/, which CAN affect a build and must invalidate the receipt.
+# Process artifacts are excluded -- but only the ones carrying STATUS, never the
+# ones carrying requirements. /phase-review and /phase-done necessarily run after
+# the gate, so fingerprinting their output would make a receipt go stale the moment
+# a phase is written up. Status therefore lives in files of its own:
+#
+#   specs/<feature>/status.md   phase progress
+#   docs/roadmap/status.md      delivery board
+#
+# NOT tasks.md, and NOT the roadmap itself. Those define what the work IS -- the
+# task list is the requirement for the phase, the roadmap owns scope and
+# sequencing. If they were excluded, requirements could be rewritten after the
+# gate to match whatever was built, and the receipt would still report valid.
+#
+# Everything else stays in, including spec.md, plan.md, tasks.md, the roadmap
+# definitions, and specs/*/contracts/.
 $ReceiptExcludes = @(
     ".gate-result.json",
-    "specs/*/tasks.md",
+    "specs/*/status.md",
     "specs/*/ai-code-review.md",
     "specs/*/human-pr-review.md",
-    "docs/roadmap"
+    "docs/roadmap/status.md"
 )
 
 function Get-GateFingerprint {
@@ -51,8 +60,9 @@ function Get-GateFingerprint {
     $env:GIT_INDEX_FILE = $idx
     git read-tree HEAD 2>$null | Out-Null
     git add -A 2>$null | Out-Null
-    # -r is required: docs/roadmap is a directory, and without it git aborts the
-    # whole call, silently applying NO exclusions at all.
+    # -r is kept even though every pattern now names a file: if any pattern ever
+    # resolves to a directory, git aborts the WHOLE call without it, silently
+    # applying no exclusions at all.
     git rm --cached -q -r --ignore-unmatch @script:ReceiptExcludes 2>$null | Out-Null
     $tree = git write-tree 2>$null | Select-Object -First 1
     $env:GIT_INDEX_FILE = $previous

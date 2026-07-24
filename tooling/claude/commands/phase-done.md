@@ -8,16 +8,23 @@ unproven.
 
 Before verifying anything, complete the phase's own paperwork:
 
-- Mark the phase's tasks in `specs/<feature>/tasks.md`.
-- **Roadmap sync** (if `docs/roadmap/` exists) — bring the roadmap's status for
-  this feature/phase in line with the phase markers in `tasks.md`, per
+- Record the phase as complete in `specs/<feature>/status.md` (create it if this
+  is the first phase). One line per phase: number, date, and outcome.
+- **Roadmap sync** (if `docs/roadmap/` exists) — bring this feature's line in
+  `docs/roadmap/status.md` in line with the phase markers in `status.md`, per
   `docs/process/source-artifacts.md`.
 
 Do this before Step B so the Done check runs against the final state of the
-feature rather than a half-written one. These files, along with the review
-artifacts written in item 5, are excluded from the gate receipt's fingerprint
-(`docs/process/gate-command.md`) — process paperwork must not invalidate a gate
-result, and it can never change what builds.
+feature rather than a half-written one. These two files, along with the review
+artifacts written in item 5, are the *only* process files excluded from the gate
+receipt's fingerprint (`docs/process/gate-command.md`).
+
+**Write status to `status.md`, never to `tasks.md` or the roadmap definitions.**
+Those are fingerprinted: they define what the phase was required to do, and
+editing them here would correctly invalidate the receipt you are about to verify
+in item 3. If you find yourself wanting to change `tasks.md` at this point, the
+requirements moved during implementation — that is a stop-and-report event, not a
+paperwork update.
 
 ## Step B — verify the Definition of Done
 
@@ -58,4 +65,6 @@ Check each item and collect evidence. The numbering matches
 - Step A done and items 1–5 true → report "Phase N is Done pending human review",
   and offer the phase commit (`feat(<feature>): complete phase <N>`).
 - Anything false or unproven → report exactly which items are unmet and stop. Do
-  not soften the verdict, do not mark the phase complete in `tasks.md`.
+  not soften the verdict, and revert the Step A status entry — a phase recorded
+  complete in `status.md` that did not pass the Definition of Done makes the
+  status board lie.

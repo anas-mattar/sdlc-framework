@@ -36,9 +36,11 @@ feature, because the phase gate and the scope check both operate on a single dif
 - Roadmap items carry an **Owner** column.
 - Claiming a feature = a small commit setting the owner. Two developers cannot
   accidentally start the same feature.
-- Status updates happen at **phase boundaries only** (`/phase-done` item 7) and
-  are one-line changes — trivially mergeable, so the shared roadmap file does not
-  become a merge-conflict hotspot.
+- Status updates go to `docs/roadmap/status.md`, at **phase boundaries only**
+  (`/phase-done` Step A), and are one-line changes — trivially mergeable, so the
+  board does not become a merge-conflict hotspot. Scope and sequencing live in
+  the roadmap's other files and change by the normal reviewed process, never as
+  part of finishing a phase (`docs/process/source-artifacts.md`).
 
 ## 2a. Feature Numbering — Allocated, Not Computed
 

@@ -73,6 +73,11 @@ front:
 
 On any conflict between artifacts: **stop and report** — never silently choose.
 
+Phase progress goes in `specs/feature/<feature>/status.md`, never as edits to the
+spec's task list — the spec is fingerprinted by the gate receipt, so rewriting a
+task after the gate would (correctly) invalidate it. Wanting to change the task
+list after implementation means the requirements moved: stop and report.
+
 This project has no design source: no prototype, no Figma, no captured
 screenshots. The `spec.md` layout section plus the app's design system govern the
 UI. Offer a generated mock for non-trivial UI; never demand screenshots that

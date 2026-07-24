@@ -7,11 +7,13 @@
 # with its build steps stubbed out, and asserts every receipt state. Exit 0 = all
 # assertions passed.
 #
-# The two assertions that matter most, because they define the boundary of what a
-# receipt promises:
-#   - editing specs/<f>/spec.md MUST invalidate it (specs can change what builds)
-#   - editing specs/<f>/tasks.md MUST NOT (phase status is written after the gate)
-# Widen RECEIPT_EXCLUDES and the spec.md case fails. That is the point.
+# The assertions that matter most define the boundary of what a receipt promises:
+#   - specs/<f>/status.md MUST NOT invalidate it (status is written after the gate)
+#   - specs/<f>/tasks.md MUST invalidate it (it defines the phase's requirements,
+#     and requirements rewritten after the gate must not still read as verified)
+#   - docs/roadmap/status.md MUST NOT; the roadmap definitions MUST
+# Widen RECEIPT_EXCLUDES back to whole files and the tasks.md/roadmap cases fail.
+# That is the point: the exclusion covers status, never requirements.
 
 set -u
 
@@ -83,25 +85,35 @@ echo "// more" >> src/added.js
 check "edited untracked source invalidates"        1
 gate
 
-# --- process artifacts MUST NOT invalidate ---------------------------------
+# --- STATUS artifacts MUST NOT invalidate ----------------------------------
 # These are written by /phase-review and /phase-done, which necessarily run after
 # the user's gate. Before this exclusion existed, /phase-done invalidated the very
 # receipt it had just verified.
-echo "- [x] phase 1" >> specs/feature/001-example/tasks.md
-check "tasks.md status does not invalidate"        0
+echo "- [x] phase 1 complete" >> specs/feature/001-example/status.md
+check "feature status.md does not invalidate"      0
 echo "PASS" > specs/feature/001-example/ai-code-review.md
 check "ai-code-review.md does not invalidate"      0
 echo "APPROVED" > specs/feature/001-example/human-pr-review.md
 check "human-pr-review.md does not invalidate"     0
-echo "| 001 | done |" >> docs/roadmap/README.md
-check "roadmap status does not invalidate"         0
+echo "| 001 | done |" >> docs/roadmap/status.md
+check "roadmap status.md does not invalidate"      0
 
-# --- the exclusion must stay NARROW ----------------------------------------
+# --- REQUIREMENTS MUST invalidate, even when they are process files --------
+# The exclusion covers status, never requirements. tasks.md and the roadmap were
+# excluded wholesale until v2.2.0: a task's implementation requirements, or the
+# roadmap's scope and sequencing, could be rewritten after the gate to match
+# whatever was actually built, and the receipt still reported valid.
 echo "## New requirement" >> specs/feature/001-example/spec.md
 check "spec.md DOES invalidate"                    1
 gate
 echo "## New approach" >> specs/feature/001-example/plan.md
 check "plan.md DOES invalidate"                    1
+gate
+echo "- T7: also rewrite the parser" >> specs/feature/001-example/tasks.md
+check "tasks.md definitions DO invalidate"         1
+gate
+echo "| 002 | descoped |" >> docs/roadmap/README.md
+check "roadmap definitions DO invalidate"          1
 gate
 mkdir -p specs/feature/001-example/contracts
 echo "openapi: 3.0.0" > specs/feature/001-example/contracts/api.yml

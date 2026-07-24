@@ -234,6 +234,42 @@ done
 if [ -z "$g_bad" ]; then ok "guard blocks manifests and allows ordinary files (10 cases)"
 else bad "guard gave the wrong answer for:$g_bad"; fi
 
+# --- 12. All four gate scripts exclude the same paths ----------------------
+# The receipt machinery is copied into four scripts (node/dotnet x sh/ps1) and
+# each says "identical in every gate script -- do not let it diverge". Nothing
+# enforced that. A path excluded in gate-node.sh but not gate-dotnet.ps1 means a
+# receipt means something different per repo, which is worse than either rule
+# applied consistently. receipt-contract.sh only ever exercises gate-node.sh.
+echo "Gate exclusion parity"
+sh_ex() { grep '^RECEIPT_EXCLUDES=' "$1" | sed 's/^[^"]*"//; s/"$//' | tr ' ' '\n' | grep -v '^$' | sort -u; }
+ps_ex() { sed -n '/\$ReceiptExcludes = @(/,/^)/p' "$1" | grep -oE '"[^"]+"' | tr -d '"' | sort -u; }
+
+ref=$(sh_ex tooling/gate/gate-node.sh)
+ex_bad=""
+for f in tooling/gate/gate-dotnet.sh; do
+    [ "$(sh_ex "$f")" = "$ref" ] || ex_bad="$ex_bad $f"
+done
+for f in tooling/gate/gate-node.ps1 tooling/gate/gate-dotnet.ps1; do
+    [ "$(ps_ex "$f")" = "$ref" ] || ex_bad="$ex_bad $f"
+done
+
+if [ -z "$ref" ]; then
+    bad "could not extract RECEIPT_EXCLUDES from tooling/gate/gate-node.sh"
+elif [ -z "$ex_bad" ]; then
+    ok "all 4 gate scripts exclude the same $(echo "$ref" | wc -l | tr -d ' ') paths"
+else
+    bad "gate scripts disagree with gate-node.sh on what the receipt excludes:$ex_bad"
+fi
+
+# The exclusion list must never name a whole requirements artifact. Excluding
+# tasks.md or docs/roadmap wholesale (as v2.0-2.1 did) lets requirements be
+# rewritten after the gate while the receipt still reports valid.
+case "$ref" in
+    *"specs/*/tasks.md"*|*"docs/roadmap"[!/]*|*"docs/roadmap")
+        bad "the exclusion list covers a requirements artifact, not just status" ;;
+    *)  ok "exclusions name status files only, no requirements artifacts" ;;
+esac
+
 echo
 echo "passed=$pass failed=$fail skipped=$skip"
 [ "$fail" -eq 0 ] || exit 1

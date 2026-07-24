@@ -114,9 +114,25 @@ Rules common to all sources:
 
 - The roadmap is the **delivery source of truth**: consult it before starting any
   feature; if it conflicts with a feature's `spec.md`, stop and report.
-- Living document: keep its statuses in sync with `specs/<feature>/tasks.md`
+- Living document: keep its statuses in sync with `specs/<feature>/status.md`
   phase markers as work merges. `/phase-done` includes this sync as a checked
   item.
+
+#### Scope and status are separate files
+
+`docs/roadmap/status.md` holds the mutable delivery board — one line per feature:
+number, name, owner, current status. Everything else under `docs/roadmap/` holds
+**scope and sequencing**, which is not status: what is in the release, in what
+order, and what has been descoped.
+
+The split exists because the gate receipt fingerprints the roadmap definitions
+but not `status.md` (`docs/process/gate-command.md`). Marking a feature "done"
+after the gate is bookkeeping and must not invalidate a receipt; *descoping* an
+item after the gate changes what was promised, and must. Keeping both in one file
+would force the framework to choose one behavior for both.
+
+The same split applies per feature: `tasks.md` defines the phases, and
+`specs/<feature>/status.md` records which are complete.
 
 #### Roadmap structure
 

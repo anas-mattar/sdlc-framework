@@ -89,7 +89,10 @@ unfilled tier line means every rule falls back to the strictest reading.
      vocabulary, external-system quirks.
    - Create the source-artifact slots that apply (`docs/business/`,
      `docs/prototypes/`, `docs/roadmap/`) and read
-     `docs/process/source-artifacts.md` for their rules: each artifact type owns
+     `docs/process/source-artifacts.md` for their rules. If you create
+     `docs/roadmap/`, put the mutable board in `docs/roadmap/status.md` and keep
+     scope/sequencing in the other files — the gate receipt fingerprints the
+     latter and not the former. Each artifact type owns
      one dimension of authority (roadmap = scope/status, guides = behavior,
      prototype = layout); guides and requirement docs — wherever they live
      (repo file, GitHub/GitLab, Notion, loose file) — get a versioned markdown

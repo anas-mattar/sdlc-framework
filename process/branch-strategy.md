@@ -47,7 +47,8 @@ branch:     feature/NNN-<name>
 spec dir:   specs/feature/NNN-<name>/
             ├─ spec.md
             ├─ plan.md
-            ├─ tasks.md
+            ├─ tasks.md               (phase definitions -- fingerprinted)
+            ├─ status.md              (phase progress -- NOT fingerprinted)
             ├─ research.md            (optional)
             ├─ data-model.md          (optional)
             ├─ contracts/             (optional)

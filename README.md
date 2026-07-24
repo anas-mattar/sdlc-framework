@@ -132,9 +132,14 @@ inside the docs assume this layout:
 │   ├── business/              # source artifacts: guides/manuals (+ md extraction)
 │   ├── prototypes/            # source artifacts: HTML prototypes + capture script
 │   └── roadmap/               # source artifacts: delivery roadmap
+│       └── status.md          #   the mutable board — the rest is scope/sequencing
 └── specs/                     # per-feature artifacts (Spec Kit layout)
-    └── <feature>/             # spec.md, plan.md, tasks.md, screenshots/, …
+    └── <feature>/             # spec.md, plan.md, tasks.md, status.md, screenshots/, …
 ```
+
+Both `status.md` files exist because the gate receipt fingerprints requirements
+but not status: ticking a phase complete after the gate must not invalidate it,
+while changing what the phase was required to do must (`process/gate-command.md`).
 
 ## Scope Tiers
 
