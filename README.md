@@ -103,7 +103,7 @@ sdlc-framework/
 │   └── nextjs-trpc/           # Next.js App Router + tRPC + NextAuth + shadcn/ui
 └── tooling/                   # ships BEHAVIOR, not prose — copy alongside the docs
     ├── gate/                  # gate scripts (one command, prints EXIT: + writes a receipt)
-    ├── ci/                    # gate.yml — the mechanical backstop, solo projects included
+    ├── ci/                    # gate.yml + CODEOWNERS — the mechanical backstop, solo included
     ├── claude/                # settings template, hooks, slash commands
     └── project-docs/          # LAYER 3 skeletons (gotchas, domain rules)
 tests/                         # the framework's own regression tests
@@ -124,6 +124,8 @@ inside the docs assume this layout:
 ├── gate.ps1 / gate.sh         # from tooling/gate (per repo, at repo root)
 ├── .gate-result.json          # gate receipt — GITIGNORED, never committed
 ├── .github/workflows/gate.yml # from tooling/ci (per repo)
+├── .github/CODEOWNERS         # from tooling/ci — who must approve the gate's own definition
+├── .gate-sha256               # pins gate.sh; CI refuses to run an unpinned gate
 ├── .claude/                   # from tooling/claude (settings, hooks, commands)
 ├── docs/
 │   ├── process/               # ← process/

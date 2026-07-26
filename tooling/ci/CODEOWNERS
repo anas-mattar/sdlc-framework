@@ -1,0 +1,47 @@
+# Copy to <repo>/.github/CODEOWNERS and replace the placeholders with real
+# GitHub handles or teams. Then turn on "Require review from Code Owners" in
+# branch protection for `main` — without that setting this file is a comment.
+#
+# WHY: every artifact the gate's verdict rests on lives inside the repository,
+# which means inside the perimeter the party being checked controls. The gate
+# script defines what "passing" means. The workflow decides whether the gate runs
+# at all. The pin file is what makes a change to the gate visible. The hook
+# configuration decides whether the package guard exists. None of these is
+# protected by anything mechanical, and all of them can be edited in the same pull
+# request as the work they would excuse.
+#
+# CODEOWNERS does not prevent those edits. It makes them require a named human's
+# approval, which is the only trust anchor available that sits outside the
+# perimeter. On a solo project, listing yourself is still worth it: GitHub will
+# surface the file in the review UI and the approval becomes a timestamped,
+# out-of-band act rather than an assumption.
+#
+# {{OWNER}} — e.g. @your-handle, or @your-org/your-team
+# {{REVIEWER}} — someone who is not the usual author of the code, where one exists.
+
+# --- the gate's own definition ---------------------------------------------
+# Change either of these and the meaning of "the gate passed" changes.
+/gate.sh                    {{OWNER}} {{REVIEWER}}
+/gate.ps1                   {{OWNER}} {{REVIEWER}}
+/.gate-sha256               {{OWNER}} {{REVIEWER}}
+
+# --- whether the gate runs at all ------------------------------------------
+# For same-repo pull_request events GitHub runs the workflow definition from the
+# head branch, so without this a pull request can weaken its own required check.
+/.github/workflows/         {{OWNER}} {{REVIEWER}}
+/.github/CODEOWNERS         {{OWNER}} {{REVIEWER}}
+
+# --- whether the guards exist ----------------------------------------------
+# settings.json wires the package and install guards; the hooks are the guards.
+# The approval marker is never committed at all — see the CI check for it.
+/.claude/settings.json      {{OWNER}} {{REVIEWER}}
+/.claude/settings.local.json {{OWNER}} {{REVIEWER}}
+/.claude/hooks/             {{OWNER}} {{REVIEWER}}
+
+# --- the rules themselves ---------------------------------------------------
+# Layer 1 and 2 docs are upstream-owned: a project edits them only by porting the
+# change upstream first (`CONTRIBUTING.md`). Listing them here is what makes that
+# rule visible at the moment someone tries.
+/docs/process/              {{OWNER}}
+/docs/stack-backend/        {{OWNER}}
+/docs/stack-frontend/       {{OWNER}}

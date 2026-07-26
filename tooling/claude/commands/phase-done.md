@@ -37,6 +37,26 @@ Check each item and collect evidence. The numbering matches
    approved in `tasks.md`; Small → `spec.md` alone, marked approved. Do not demand
    a `plan.md` from a Small-tier project, and do not accept its absence from a
    Medium/Large one.
+
+   Then check the approval is real rather than written. An approval line inside a
+   file the AI authored proves nothing — a compliant agent writing a well-formed
+   spec writes that line too. Run:
+
+   ```
+   git log -1 --format='%an <%ae>  %aI' -- specs/<feature>/spec.md
+   git log --format='%an  %aI' -20 -- <the phase's implementation paths>
+   ```
+
+   Report item 1 as **UNPROVEN**, not satisfied, when any of these holds:
+   - the spec has never been committed — it exists only in the working tree;
+   - its last commit is *later* than the earliest implementation commit for this
+     phase, so the requirements were finalised after the code;
+   - the spec and the implementation were committed in the same commit, or by the
+     same session — there was no separate act of approval to point at.
+
+   Say which of the three it was. Do not offer to fix it by committing the spec
+   now: that produces the artifact without the act, which is the exact failure this
+   check exists to detect.
 2. **Single-phase scope** — `git diff --stat` shows only files belonging to the
    approved phase.
 3. **Gate passed** — run `./gate.ps1 -Verify` (or `./gate.sh --verify`) in each
@@ -59,6 +79,20 @@ Check each item and collect evidence. The numbering matches
    `specs/_templates/human-pr-review-template.md` — a separate deliberate act, not
    a formality, and never performed by you. Never report this item as satisfied on
    your own assessment of the code.
+
+   A ticked `human-pr-review.md` is **not** evidence. That file lives in the
+   repository, you can write it, and the receipt contract deliberately does not
+   fingerprint it — so its contents are exactly as trustworthy as your own report.
+   The evidence is outside the tree:
+
+   ```
+   gh pr view --json reviews --jq '[.reviews[] | select(.state=="APPROVED") | .author.login]'
+   ```
+
+   If `gh` is unavailable, a signed `Reviewed-by:` trailer on the phase commit is
+   the fallback. With neither, item 6 is **PENDING** — which is the normal and
+   correct state at `/phase-done` time, since review follows the commit. Report it
+   as pending with the reason; never report it as satisfied because a file says so.
 
 ## Verdict
 

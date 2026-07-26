@@ -19,6 +19,22 @@ for it to be enforceable, and no other document is required to interpret it.
    required in every project; `plan.md` (technical approach) and `tasks.md` (phase
    breakdown) are required by the scope tier this project selected at setup and
    recorded in `CLAUDE.md`. Implementation never starts from an unapproved spec.
+
+   **What counts as approval.** A line of text inside a file is not evidence: the
+   agent wrote the file, so it can write the line, and a compliant agent producing
+   a well-formed spec produces exactly the approval line the checklist looks for.
+   Approval is therefore a **git object**, not a string — the spec's approving
+   commit, authored by a human, made before the implementation began:
+
+   ```
+   git log -1 --format='%an <%ae>  %aI' -- <spec path>
+   ```
+
+   The item is satisfied when that author is a human and that timestamp precedes
+   the phase's implementation commits. If the approving commit came from the same
+   session that wrote the implementation, item 1 is **UNPROVEN** — say so rather
+   than ticking it. This is checkable solo: committing your own spec first is still
+   a separate, timestamped, deliberate act.
 2. **Single-phase scope respected** — only the one approved phase was implemented; no
    unrelated changes are bundled in (CLAUDE.md Strict Rules).
 3. **Gate passed, proven by a valid receipt** — the user (not AI) ran the gate
@@ -47,6 +63,27 @@ for it to be enforceable, and no other document is required to interpret it.
 
    The requirement that a *human* approves before merge is absolute in both cases.
    What varies is only whether that human can be the author.
+
+   **What counts as approval.** The same argument as item 1, and it bites harder
+   here. The human review template is a markdown file in the repository, and the
+   receipt contract deliberately does not fingerprint it, so an agent can produce a
+   fully-ticked review signed `self (solo project)` at zero cost to any mechanical
+   check. The distinguishing property this item actually names — "a separate,
+   deliberate act from implementing" — is a claim about a mental state, and mental
+   states leave no artifact. So the signature must live somewhere the agent cannot
+   write. Either is acceptable:
+
+   ```
+   gh pr view --json reviews --jq '[.reviews[] | select(.state=="APPROVED") | .author.login]'
+   git log -1 --format='%(trailers:key=Reviewed-by,valueonly)' <phase commit>
+   ```
+
+   A pull-request approval is the stronger of the two: it is timestamped, attached
+   to a specific head SHA, and recorded outside the working tree. Solo projects can
+   use it too — approving your own pull request is still a deliberate, out-of-band
+   act, and it is the difference between a review that happened and a file that
+   says one did. The `human-pr-review.md` file remains the place the *findings* are
+   recorded; it is no longer the thing that proves the review occurred.
 
 Items 1–5 gate the **phase commit**. Item 6 gates the **merge**: a human reviewer
 approves the pull request containing the committed phase. The order is

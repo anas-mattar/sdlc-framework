@@ -1,19 +1,44 @@
 # CI gate — the mechanical backstop.
 #
 # Copy to <repo>/.github/workflows/gate.yml, then uncomment the toolchain block for
-# your stack. Keep exactly ONE toolchain active per repo.
+# your stack. Keep exactly ONE toolchain active per repo. BOTH ship commented out:
+# a file that arrives with one already active makes "uncomment yours" produce two,
+# and CI then runs `yarn install` on a repo with no package.json.
 #
 # This runs the repository's own `gate.sh` — the same script the developer runs
 # locally, so there is no separate CI command chain to drift out of sync
 # (`docs/process/team-workflow.md` §3).
 #
 # WHY THIS MATTERS ON SOLO PROJECTS: the local gate is user-run and its receipt is
-# local evidence. CI is the only check that is not run by the party being checked.
-# On a team, peer review is a second line of defence; solo, this file is the only
-# one. Fifteen lines of YAML is the cheapest guarantee in the framework.
+# local evidence. CI is the only check not run by the party being checked. On a
+# team, peer review is a second line of defence; solo, this file is the only one.
 #
 # After adding this, turn on branch protection for `main` and mark the `gate` check
 # as required — an unenforced check is decoration.
+#
+# ---------------------------------------------------------------------------
+# WHAT THIS DOES AND DOES NOT GUARANTEE. Read this before trusting it.
+#
+# CI runs a script that lives in the repository, from the pull request's own head
+# branch. So "CI is not run by the party being checked" holds for the *execution*
+# and not for the *definition*: an agent that edits `gate.sh` to `true` and then
+# runs it honestly produces a receipt that is genuine in every checkable respect
+# and a green CI job, while the test suite still fails. This does not take malice
+# — an agent whose lint step trips on pre-existing warnings, reading that the gate
+# script is the only place gate commands are defined, may reasonably conclude that
+# adjusting the gate is the sanctioned way to adjust the gate.
+#
+# The `Pin the gate` step below is what closes that. It does NOT make `gate.sh`
+# unmodifiable — nothing in-repo can. What it does is make a modification
+# *impossible to land silently*: changing the gate now requires changing
+# `.gate-sha256` in the same pull request, which is a one-line diff a reviewer
+# cannot miss and CODEOWNERS can require a specific human to approve.
+#
+# The same caveat applies to this workflow file: for same-repo `pull_request`
+# events GitHub runs the workflow definition from the head branch, so a PR can
+# weaken its own required check. Put `.github/workflows/` in CODEOWNERS too — see
+# `tooling/ci/CODEOWNERS` — and require review from someone who is not the author.
+# ---------------------------------------------------------------------------
 
 name: gate
 
@@ -28,13 +53,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # --- toolchain: keep ONE of these ---------------------------------------
+      # Fail closed. A missing pin file is indistinguishable from a deleted one,
+      # so treat it as a failure rather than skipping the check — the whole point
+      # is that weakening the gate cannot be done quietly.
+      #
+      # To change the gate legitimately: edit gate.sh, then regenerate the pin in
+      # the SAME commit with
+      #     sha256sum gate.sh > .gate-sha256
+      # and say in the PR description why the gate changed.
+      - name: Pin the gate
+        run: |
+          if [ ! -f .gate-sha256 ]; then
+            echo "MISSING: .gate-sha256 — the gate script is unpinned, so a change to"
+            echo "  gate.sh would land without anyone having to acknowledge it."
+            echo "  Create it with:  sha256sum gate.sh > .gate-sha256"
+            exit 1
+          fi
+          if ! sha256sum -c .gate-sha256; then
+            echo
+            echo "CHANGED: gate.sh does not match .gate-sha256."
+            echo "  If this change is intended, regenerate the pin in this same PR:"
+            echo "    sha256sum gate.sh > .gate-sha256"
+            echo "  and say in the PR description what the gate now does differently."
+            echo "  If it is not intended, the gate has been weakened — find out by whom."
+            exit 1
+          fi
+
+      # The package guard is disabled for as long as this marker exists. It is
+      # meant to be created by a human, used for one approved change, and deleted
+      # when the phase commits. Committing it makes that "temporarily open" state
+      # permanent and shared — and /framework-doctor, which finds the residue, runs
+      # after setup and after upgrade, never during phase work.
+      - name: The package-guard override must not be committed
+        run: |
+          if git ls-files --error-unmatch .claude/allow-package-changes >/dev/null 2>&1; then
+            echo "COMMITTED: .claude/allow-package-changes is tracked in git."
+            echo "  While it exists the package guard permits every manifest edit and"
+            echo "  every install command, for everyone who clones this repo."
+            echo "  Remove it:  git rm --cached .claude/allow-package-changes"
+            echo "  and add it to .gitignore."
+            exit 1
+          fi
+
+      # --- toolchain: uncomment exactly ONE of these ---------------------------
       # Node / Next.js:
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-      - name: Install dependencies
-        run: corepack enable && yarn install --immutable
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      # - name: Install dependencies
+      #   run: corepack enable && yarn install --immutable
 
       # .NET:
       # - uses: actions/setup-dotnet@v4

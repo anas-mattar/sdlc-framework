@@ -123,8 +123,22 @@ unfilled tier line means every rule falls back to the strictest reading.
      an unrunnable hook as an error rather than a block — so an unverified guard
      is an absent guard.
    - Copy `tooling/ci/gate.yml` to `<repo>/.github/workflows/gate.yml`, uncomment
-     your toolchain, and require the check on `main`. Do this on solo projects
-     too (see Q5).
+     **one** toolchain block (both ship commented out), and require the check on
+     `main`. Do this on solo projects too (see Q5).
+   - **Pin the gate script.** From each repo root, run `sha256sum gate.sh > .gate-sha256`
+     and commit both. CI refuses to run an unpinned gate. This is what stops
+     `gate.sh` being weakened silently: CI runs a script that lives in the
+     repository, from the pull request's own head branch, so a gate edited to
+     `true` produces a genuine receipt and a green build. Pinning does not prevent
+     the edit — it makes the edit require a second, obvious line in the same diff.
+   - Copy `tooling/ci/CODEOWNERS` to `<repo>/.github/CODEOWNERS`, replace the
+     placeholders, and enable *Require review from Code Owners* in branch
+     protection. Everything the gate's verdict rests on — `gate.sh`,
+     `.gate-sha256`, `.github/workflows/`, `.claude/` — lives inside the repository
+     and can be changed in the same pull request as the work it would excuse.
+     CODEOWNERS is the only trust anchor available that sits outside that
+     perimeter. Worth doing solo: it makes the approval a timestamped act rather
+     than an assumption.
 6. **Generate CLAUDE.md:**
    - Copy `CLAUDE.md.template` → `<project>/CLAUDE.md`, fill every `{{…}}`
      placeholder (including `{{SCOPE_TIER}}` and `{{TEAM_SIZE}}` from Q6 and Q5),
