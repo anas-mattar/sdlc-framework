@@ -3,9 +3,9 @@
 What this framework looks like after `SETUP.md` on the smallest project it
 supports: **one developer, one Next.js repo, low cost of a mistake.**
 
-Read this before installing anywhere. Fifteen minutes of setup produces a
-specific shape, and it is easier to recognise that shape than to infer it from
-the instructions.
+Read this before installing anywhere. Setup produces a specific shape, and it is
+easier to recognise that shape than to infer it from the instructions. Budget
+half a day to reach it on a stack that already ships rules — see `SETUP.md`.
 
 ## The answers that produced it
 

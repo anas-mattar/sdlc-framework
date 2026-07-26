@@ -4,9 +4,22 @@
 > steps in a brownfield path (baseline gate first, tribal-knowledge capture,
 > compliance-as-you-touch, no spec backfilling).
 
-Answer the 6 questions, then follow the install steps. Total time: ~15 minutes.
+Answer the 6 questions, then follow the install steps.
+
+**Budget half a day** for a new project on a stack that already ships rules
+(`stacks/dotnet-api/`, `stacks/nextjs-trpc/`), and **a day or more** if you are
+writing a new `stacks/` folder — Question 1 asks you to, and there is no template
+to start from yet. Existing projects: getting the baseline gate green is the long
+pole and is genuinely unbounded; `ADOPTION.md` treats it as feature 001 rather
+than as setup, which is the honest framing.
+
+The bulk of the time is not the copying. It is reading enough to answer Q2 and Q6
+properly, filling `CLAUDE.md` (seven placeholder types, two architecture
+paragraphs, sections to delete), and getting the gate green for the first time.
+
 (You can also hand this file to Claude Code and say "set up this project with the
-sdlc-framework at <path>" — it will interview you and do the steps.)
+sdlc-framework at <path>" — it will interview you and do the steps. That removes
+the copying, not the decisions or the first green gate.)
 
 ## The 6 Questions
 
@@ -27,7 +40,7 @@ into CLAUDE.md.**
 **Q3. Where do designs come from?**
 The design source can vary **per feature**: HTML prototype, Figma, AI-generated
 mock, or no design at all. All sources normalize to the same contract — a frozen
-`specs/<feature>/screenshots/` folder with provenance in `notes.md` — per the
+`specs/feature/NNN-<name>/screenshots/` folder with provenance in `notes.md` — per the
 table in `docs/process/source-artifacts.md`. When screenshots exist for a
 feature they are the #1 layout authority; when a feature has no design, the
 `spec.md` layout section plus the app's design system govern instead. Note the
@@ -147,7 +160,7 @@ unfilled tier line means every rule falls back to the strictest reading.
      compare against.
 7. **Spec scaffold:**
    - If using GitHub Spec Kit, run `specify init` and adopt its
-     `specs/<feature>/` layout; copy `process/templates/` review checklists into
+     `specs/feature/NNN-<name>/` layout; copy `process/templates/` review checklists into
      `specs/_templates/`. Otherwise create `specs/` manually with the same shape.
 8. **Verify the install:**
    - Run `/framework-doctor`. It checks the things that fail silently: unfilled

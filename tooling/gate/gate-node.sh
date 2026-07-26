@@ -26,8 +26,8 @@
 # the gate, so fingerprinting their output would make a receipt go stale the moment
 # a phase is written up. Status therefore lives in files of its own:
 #
-#   specs/<feature>/status.md   phase progress
-#   docs/roadmap/status.md      delivery board
+#   specs/feature/NNN-<name>/status.md   phase progress
+#   docs/roadmap/status.md               delivery board
 #
 # NOT tasks.md, and NOT the roadmap itself. Those define what the work IS -- the
 # task list is the requirement for the phase, the roadmap owns scope and
@@ -36,6 +36,13 @@
 #
 # Everything else stays in, including spec.md, plan.md, tasks.md, the roadmap
 # definitions, and specs/*/contracts/.
+#
+# The patterns below are git PATHSPECS, matched with fnmatch WITHOUT FNM_PATHNAME:
+# `*` therefore crosses `/`, so `specs/*/status.md` matches the real, nested
+# `specs/feature/NNN-<name>/status.md`. Do NOT "correct" these to `specs/feature/*/`
+# or to a single directory level -- and do not assume shell glob semantics. Getting
+# this wrong un-excludes every status file, which makes every receipt go stale the
+# moment /phase-done writes one. tests/receipt-contract.sh covers the real layout.
 RECEIPT_EXCLUDES=".gate-result.json specs/*/status.md specs/*/ai-code-review.md specs/*/human-pr-review.md docs/roadmap/status.md"
 
 fingerprint() {

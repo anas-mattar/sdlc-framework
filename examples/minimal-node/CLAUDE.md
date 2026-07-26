@@ -67,13 +67,13 @@ front:
 
 ## Source of Truth Priority
 
-1. `specs/feature/<feature>/spec.md`
+1. `specs/feature/NNN-<name>/spec.md`
 2. `docs/stack-frontend/` (mandatory defaults)
 3. `docs/project/` (domain rules and gotchas)
 
 On any conflict between artifacts: **stop and report** — never silently choose.
 
-Phase progress goes in `specs/feature/<feature>/status.md`, never as edits to the
+Phase progress goes in `specs/feature/NNN-<name>/status.md`, never as edits to the
 spec's task list — the spec is fingerprinted by the gate receipt, so rewriting a
 task after the gate would (correctly) invalidate it. Wanting to change the task
 list after implementation means the requirements moved: stop and report.

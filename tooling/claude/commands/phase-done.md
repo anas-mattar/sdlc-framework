@@ -8,7 +8,7 @@ unproven.
 
 Before verifying anything, complete the phase's own paperwork:
 
-- Record the phase as complete in `specs/<feature>/status.md` (create it if this
+- Record the phase as complete in `specs/feature/NNN-<name>/status.md` (create it if this
   is the first phase). One line per phase: number, date, and outcome.
 - **Roadmap sync** (if `docs/roadmap/` exists) — bring this feature's line in
   `docs/roadmap/status.md` in line with the phase markers in `status.md`, per
@@ -43,7 +43,7 @@ Check each item and collect evidence. The numbering matches
    spec writes that line too. Run:
 
    ```
-   git log -1 --format='%an <%ae>  %aI' -- specs/<feature>/spec.md
+   git log -1 --format='%an <%ae>  %aI' -- specs/feature/NNN-<name>/spec.md
    git log --format='%an  %aI' -20 -- <the phase's implementation paths>
    ```
 
@@ -70,7 +70,7 @@ Check each item and collect evidence. The numbering matches
      user runs the gate. Never accept a pasted `EXIT: 0` in place of a receipt,
      and never infer success from a previous run.
 4. **Diff reviewed** — the user has confirmed reviewing `git diff --stat`.
-5. **AI review complete** — `specs/<feature>/ai-code-review.md` contains a dated
+5. **AI review complete** — `specs/feature/NNN-<name>/ai-code-review.md` contains a dated
    PASS for this phase (run `/phase-review` if missing).
 6. **Human review** — required before MERGE (not before commit). Confirm the user
    knows merge is blocked until a human approves. Read the `Developers:` line in

@@ -138,7 +138,10 @@ inside the docs assume this layout:
 │   └── roadmap/               # source artifacts: delivery roadmap
 │       └── status.md          #   the mutable board — the rest is scope/sequencing
 └── specs/                     # per-feature artifacts (Spec Kit layout)
-    └── <feature>/             # spec.md, plan.md, tasks.md, status.md, screenshots/, …
+    └── feature/
+        └── NNN-<name>/        # spec.md, plan.md, tasks.md, status.md, screenshots/, …
+                               #   mirrors the branch name — `process/branch-strategy.md`
+                               #   is authoritative on this path
 ```
 
 Both `status.md` files exist because the gate receipt fingerprints requirements

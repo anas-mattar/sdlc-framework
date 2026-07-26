@@ -26,7 +26,7 @@ Notes: [deviations found, or "none"]
 
 *Skip only if this phase has no UI.*
 
-- [ ] UI matches `specs/feature/<name>/screenshots/` (layout, component placement, flow).
+- [ ] UI matches `specs/feature/NNN-<name>/screenshots/` (layout, component placement, flow).
 - [ ] Screenshot sequence order (prototype view order) is respected in navigation/flow.
 - [ ] No invented layout where screenshots or a prototype exist.
 

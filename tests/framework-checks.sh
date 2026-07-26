@@ -379,6 +379,39 @@ else
         | grep -v '^process/gate-command.md:' | sed 's/^/          /'
 fi
 
+# --- 7e. One spec-folder layout, not two ------------------------------------
+# Two incompatible layouts shipped simultaneously for three releases:
+# `specs/<feature>/` in the README, CLAUDE.md.template, source-artifacts.md and
+# both slash commands, against `specs/feature/NNN-<name>/` in branch-strategy.md
+# -- which calls itself authoritative -- both review templates, and the example.
+#
+# The receipt machinery survived that by luck rather than design. Git pathspecs
+# are matched with fnmatch WITHOUT FNM_PATHNAME, so `*` crosses `/` and
+# `specs/*/status.md` happens to match both shapes. A maintainer "correcting" the
+# pattern to match a comment written in the other layout would silently un-exclude
+# every status file and make every receipt go stale at /phase-done.
+#
+# CHANGELOG.md is exempt: it records what past releases said, and rewriting a
+# released entry to match a later convention is falsification, not consistency.
+#
+# This file is excluded from its own scan: the comment above has to name the wrong
+# form in order to explain it, and a rule that cannot state the thing it forbids is
+# a rule nobody can maintain.
+echo "Spec layout"
+layout_scan() {
+    grep -rnE 'specs/<[a-z]|specs/feature/<[a-z]' \
+        process/ stacks/ modules/ tooling/ tests/ examples/ \
+        README.md SETUP.md ADOPTION.md CONTRIBUTING.md CLAUDE.md.template 2>/dev/null \
+        | grep -v '^tests/framework-checks.sh:'
+}
+layout_bad=$(layout_scan | wc -l | tr -d ' ')
+if [ "$layout_bad" -eq 0 ]; then
+    ok "every spec path uses the canonical specs/feature/NNN-<name>/ layout"
+else
+    bad "documents disagree on the spec-folder layout ($layout_bad) -- branch-strategy.md is authoritative"
+    layout_scan | sed 's/^/          /'
+fi
+
 # --- 8. No dependency on an unshipped constitution (ratchet) ----------------
 # Layers 1 and 2 used to cite constitution principles (I, X, XVI, XVII) as the
 # authority behind the Definition of Done and the review templates -- a document

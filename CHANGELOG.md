@@ -51,7 +51,7 @@ file guard never saw, so a project could run reporting `GUARD: verified` with
 every real install path open. `guard-installs.sh` / `.ps1` closes it: 46 command
 forms, the same approval marker, the same exit codes.
 
-### Self-tests: 34 assertions → 57
+### Self-tests: 34 assertions -> 58
 
 The suite passed while examining almost nothing. Each of these is a check that
 now tests what the README already claimed it tested:
@@ -103,6 +103,39 @@ MSYS fork-and-pipe is slow enough that a long run intermittently stalls — a
 verifier that hangs teaches you to stop running it. The two guards' own process
 counts are down by a third for the same reason.
 
+### One spec-folder layout, not two
+
+`specs/<feature>/` was asserted by the README, `CLAUDE.md.template`,
+`source-artifacts.md` and both slash commands. `specs/feature/NNN-<name>/` was
+asserted by `branch-strategy.md` — which calls itself *the authoritative branch
+naming and spec-path convention* — both review templates, and the shipped example.
+A third form, `specs/feature/<feature>/`, appeared in the example's `CLAUDE.md`.
+All 33 occurrences now use `specs/feature/NNN-<name>/`, and a self-test fails on
+any reintroduction.
+
+This mattered more than a cosmetic inconsistency. The receipt machinery survived
+it **by luck**: git pathspecs are matched with `fnmatch` *without* `FNM_PATHNAME`,
+so `*` crosses `/` and `specs/*/status.md` happens to match the nested real path.
+The comment directly above that pattern was written in the other layout — so a
+maintainer "correcting" the pattern to agree with the comment would have silently
+un-excluded every status file, and every receipt would have gone stale the moment
+`/phase-done` wrote one. The pathspec behaviour is now documented in all four gate
+scripts, where it is load-bearing and was written down nowhere.
+
+`CHANGELOG.md` is deliberately exempt from the new check: it records what past
+releases said, and rewriting a released entry to match a later convention is
+falsification rather than consistency.
+
+### "~15 minutes" is gone
+
+Realistic best case for a greenfield install on a stack that already ships rules
+is half a day; a stack without rules is a day or more, because Question 1 asks you
+to author one and there is no template. `SETUP.md` and the example now say so, and
+say where the time actually goes — reading enough to answer Q2 and Q6, filling
+`CLAUDE.md`, and the first green gate. A user told fifteen minutes who is ninety
+minutes in concludes the framework is broken rather than that the estimate was
+optimistic, and reads every later instruction with less trust.
+
 ### Corrected claims
 
 The README said the receipt is evidence an AI "cannot fabricate". The fingerprint
@@ -136,6 +169,7 @@ stop checking the others.
 | `tooling/claude/hooks/verify-guard.sh`, `.ps1` | **Copy** — then re-run it; a project that installed only the file guard fails here, which is the point. |
 | `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. |
 | `process/*`, `stacks/nextjs-trpc/compliance-checklist.md` | **Copy** |
+| `CLAUDE.md.template` | **Merge** — you filled its placeholders. The spec paths in the task→doc map and the source-of-truth list change to `specs/feature/NNN-<name>/`. |
 | `README.md`, `SETUP.md`, `SECURITY.md`, `CHANGELOG.md`, `VERSION`, `tests/*`, `.gitattributes` | **None** — upstream only. |
 
 After upgrading, re-run `verify-guard` and confirm **both** hooks are wired: a

@@ -8,8 +8,8 @@
 # assertions passed.
 #
 # The assertions that matter most define the boundary of what a receipt promises:
-#   - specs/<f>/status.md MUST NOT invalidate it (status is written after the gate)
-#   - specs/<f>/tasks.md MUST invalidate it (it defines the phase's requirements,
+#   - specs/feature/NNN-<name>/status.md MUST NOT invalidate it (status is written after the gate)
+#   - specs/feature/NNN-<name>/tasks.md MUST invalidate it (it defines the phase's requirements,
 #     and requirements rewritten after the gate must not still read as verified)
 #   - docs/roadmap/status.md MUST NOT; the roadmap definitions MUST
 # Widen RECEIPT_EXCLUDES back to whole files and the tasks.md/roadmap cases fail.

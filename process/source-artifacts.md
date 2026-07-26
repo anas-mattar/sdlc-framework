@@ -13,7 +13,7 @@ compete with each other:
 |---|---|---|---|
 | **Roadmap** | `docs/roadmap/` | scope, sequencing, delivery status | behavior or layout |
 | **Guide / manual / requirement doc** | `docs/business/` | business behavior and rules | layout or delivery order |
-| **Design prototype (any source) → feature screenshots** | `docs/prototypes/` → `specs/<feature>/screenshots/` | UI layout, component placement, flow | business rules or scope |
+| **Design prototype (any source) → feature screenshots** | `docs/prototypes/` → `specs/feature/NNN-<name>/screenshots/` | UI layout, component placement, flow | business rules or scope |
 
 - A conflict **within** a dimension (e.g. `spec.md` and the manual disagree about
   behavior) → **stop and report**; the user decides.
@@ -26,7 +26,7 @@ compete with each other:
 **Specs are derived; sources are upstream.**
 
 - `spec.md` snapshots behavior *from* the business docs.
-- `specs/<feature>/screenshots/` snapshot layout *from* the prototype.
+- `specs/feature/NNN-<name>/screenshots/` snapshot layout *from* the prototype.
 - `tasks.md` reflects sequencing *from* the roadmap.
 
 When a source artifact changes **after** a feature derived from it, the feature's
@@ -34,7 +34,7 @@ artifacts do not auto-update. Report the divergence; the user decides whether th
 feature re-baselines. Never silently absorb an upstream change mid-phase.
 
 Never copy source artifacts into feature folders — reference them by path. The
-only permitted frozen derivative is `specs/<feature>/screenshots/`.
+only permitted frozen derivative is `specs/feature/NNN-<name>/screenshots/`.
 
 ## Per-Type Rules
 
@@ -78,7 +78,7 @@ Rules common to all sources:
 ### Prototypes (`docs/prototypes/`) — many sources, one contract
 
 The design source varies per feature (HTML, Figma, AI-generated, or none), but
-the contract downstream is always the same: **if `specs/<feature>/screenshots/`
+the contract downstream is always the same: **if `specs/feature/NNN-<name>/screenshots/`
 exists, it is the frozen layout authority**, with provenance recorded in the
 feature's `notes.md`. Implementation and review never care about the source
 format.
@@ -114,7 +114,7 @@ Rules common to all sources:
 
 - The roadmap is the **delivery source of truth**: consult it before starting any
   feature; if it conflicts with a feature's `spec.md`, stop and report.
-- Living document: keep its statuses in sync with `specs/<feature>/status.md`
+- Living document: keep its statuses in sync with `specs/feature/NNN-<name>/status.md`
   phase markers as work merges. `/phase-done` includes this sync as a checked
   item.
 
@@ -132,7 +132,7 @@ item after the gate changes what was promised, and must. Keeping both in one fil
 would force the framework to choose one behavior for both.
 
 The same split applies per feature: `tasks.md` defines the phases, and
-`specs/<feature>/status.md` records which are complete.
+`specs/feature/NNN-<name>/status.md` records which are complete.
 
 #### Roadmap structure
 

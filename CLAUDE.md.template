@@ -49,7 +49,7 @@ front:
 |---|---|
 | Starting any feature | `docs/process/project-rules.md`, `docs/roadmap/` (delivery source of truth) |
 | Writing or updating a `spec.md` | `docs/business/` (behavior source of truth), `docs/process/source-artifacts.md` |
-| Building or changing UI | `specs/<feature>/screenshots/`, `docs/prototypes/` (layout source of truth) |
+| Building or changing UI | `specs/feature/NNN-<name>/screenshots/`, `docs/prototypes/` (layout source of truth) |
 | Finishing any phase | `docs/process/definition-of-done.md` |
 | A migration or new entity | `docs/stack-backend/database-rules.md` |
 | Backend controllers/services/repos | `docs/stack-backend/architecture-rules.md` |
@@ -92,17 +92,17 @@ front:
 
 ## Source of Truth Priority
 
-1. `specs/<feature>/screenshots/`  <!-- per feature; absent when the feature has no design -->
-2. `specs/<feature>/spec.md`
-3. `specs/<feature>/plan.md`
-4. `specs/<feature>/contracts/`
-5. `specs/<feature>/data-model.md`
-6. `specs/<feature>/tasks.md`
+1. `specs/feature/NNN-<name>/screenshots/`  <!-- per feature; absent when the feature has no design -->
+2. `specs/feature/NNN-<name>/spec.md`
+3. `specs/feature/NNN-<name>/plan.md`
+4. `specs/feature/NNN-<name>/contracts/`
+5. `specs/feature/NNN-<name>/data-model.md`
+6. `specs/feature/NNN-<name>/tasks.md`
 
 On any conflict between artifacts: **stop and report** — never silently choose.
 Never invent a UI layout when screenshots exist.
 
-Phase progress goes in `specs/<feature>/status.md` and feature status in
+Phase progress goes in `specs/feature/NNN-<name>/status.md` and feature status in
 `docs/roadmap/status.md` — never as edits to `tasks.md` or the roadmap
 definitions, which are fingerprinted by the gate receipt. Wanting to change
 `tasks.md` after implementation means the requirements moved: stop and report.
@@ -120,7 +120,7 @@ Usual design source for this project: {{DESIGN_SOURCE}} <!-- HTML prototype at
 Per feature, whatever the source, the contract is the same
 (`docs/process/source-artifacts.md`):
 
-- If `specs/<feature>/screenshots/` exists (captured/exported from the design
+- If `specs/feature/NNN-<name>/screenshots/` exists (captured/exported from the design
   source, sequence-numbered `01-…`, provenance in `notes.md`), it is the **#1
   layout authority** — the implemented UI must follow it exactly.
 - AI-generated designs become authority only **after human approval** promotes

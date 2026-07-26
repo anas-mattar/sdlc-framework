@@ -32,7 +32,7 @@
 *Skip only if this phase has no UI.*
 
 - [ ] Ran the app and compared each affected view against
-      `specs/feature/<name>/screenshots/` — layout, component placement, and
+      `specs/feature/NNN-<name>/screenshots/` — layout, component placement, and
       view sequence match the prototype.
 - [ ] No invented layout.
 
