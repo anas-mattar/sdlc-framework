@@ -109,8 +109,13 @@ unfilled tier line means every rule falls back to the strictest reading.
    - Copy `tooling/claude/` content into `<project>/.claude/` (settings, hooks,
      and the `/claim-feature`, `/phase-review`, `/phase-done`,
      `/framework-doctor`, `/framework-upgrade` commands). Review the permissions
-     allowlist. The hook command ships in its Windows form — on macOS/Linux swap
-     it for `sh .claude/hooks/guard-packages.sh`.
+     allowlist. **Two** guards ship and both are wired in `settings.json`:
+     `guard-packages` blocks edits to manifest *files*, and `guard-installs`
+     blocks the Bash *commands* that rewrite those same manifests (`npm i`,
+     `dotnet add package`, `pip install`, `go get`). The file guard alone covers
+     the least likely path, so do not install only one. The hook commands ship in
+     their Windows form — on macOS/Linux swap them for
+     `sh .claude/hooks/guard-packages.sh` and `sh .claude/hooks/guard-installs.sh`.
    - **Prove the package guard actually blocks**: run
      `powershell -NoProfile -File .claude/hooks/verify-guard.ps1` (or
      `sh .claude/hooks/verify-guard.sh`) from the project root. It must print

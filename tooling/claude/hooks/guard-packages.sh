@@ -29,6 +29,27 @@ file_path=$(printf '%s' "$input" | tr -d '\n' | sed -n 's/.*"file_path"[[:space:
 name=${file_path##*/}
 name=${name##*\\}
 
+# --- the guard guards itself ------------------------------------------------
+# Everything this control depends on lives inside the perimeter the agent
+# controls: the approval marker, the hook configuration, and the hook script. None
+# of them is a package manifest, so without this block a blocked agent can simply
+# Write `.claude/allow-package-changes` -- whose exact filename the block message
+# below helpfully supplies -- and the guard is permanently open in one tool call.
+# /framework-doctor check 5 finds the residue afterwards, but it runs after setup
+# and after upgrade, never during phase work, and the marker can be deleted once
+# the edit has landed. So the block has to be here, at the moment of the write.
+# Claude Code reports Windows paths with backslashes, and they arrive JSON-escaped
+# as `\\`, so folding them one-for-one yields `C://proj//.claude//settings.json`.
+# Squeeze the repeats or none of the patterns below match on Windows -- the
+# platform this guard is shipped configured for.
+norm=$(printf '%s' "$file_path" | tr '\\' '/' | tr -s '/')
+case "$norm" in
+    *.claude/allow-package-changes|*.claude/settings*.json|*.claude/hooks/*)
+        echo "BLOCKED: '$file_path' is part of the package guard itself (its approval marker, its configuration, or its hook script). Only a human creates or edits these. If package changes are genuinely approved in the feature's plan.md (or spec.md at Small tier), ask the user to create the marker -- do not create it yourself." >&2
+        exit 2
+        ;;
+esac
+
 # GUARDED-MANIFESTS-BEGIN
 GUARDED="package.json package-lock.json npm-shrinkwrap.json yarn.lock
 pnpm-lock.yaml pnpm-workspace.yaml bun.lockb bun.lock deno.json deno.jsonc
@@ -43,12 +64,22 @@ Podfile.lock Cartfile Cartfile.resolved pubspec.yaml pubspec.lock mix.exs
 mix.lock"
 # GUARDED-MANIFESTS-END
 
+# Match case-insensitively, by folding both sides once. `case` is case-sensitive
+# and PowerShell's `-like` is not, so the two guards used to disagree: `Package.json`
+# was blocked on Windows and allowed on macOS/Linux. On case-insensitive macOS --
+# which is exactly where this framework directs users to the .sh hook -- that wrote
+# the real manifest straight past the guard. The parity self-test compares the
+# pattern STRINGS, so it passed throughout. Fold once, not once per pattern: this
+# hook runs on every Edit and Write.
+lname=$(printf '%s' "$name" | tr 'A-Z' 'a-z')
+lguarded=$(printf '%s' "$GUARDED" | tr 'A-Z' 'a-z')
+
 # `set -f` is required: without it the `for` list undergoes pathname expansion,
 # so `*.csproj` silently becomes whatever .csproj files happen to be in the
 # working directory -- and the pattern itself is lost.
 set -f
-for pat in $GUARDED; do
-    case "$name" in
+for pat in $lguarded; do
+    case "$lname" in
         $pat)
             [ -f ".claude/allow-package-changes" ] && exit 0
             echo "BLOCKED: '$file_path' is a package manifest/lockfile. Adding or changing packages requires approval in the feature's plan.md (or spec.md on Small-tier projects, which have no plan.md). If the approved spec covers it, ask the user to create .claude/allow-package-changes and retry." >&2

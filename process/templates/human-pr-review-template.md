@@ -97,6 +97,7 @@ Notes:
 ## Decision
 
 - **APPROVED** — phase may be merged. / **CHANGES REQUESTED** — fix findings and
-  re-review. / **REJECTED** — phase reverted per `rollback.md`.
+  re-review. / **REJECTED** — phase reverted per `docs/process/rollback-process.md`
+  (and the feature's `rollback.md`, where the tier ships one).
 - Reviewer sign-off: [name], [YYYY-MM-DD]
 - Merge performed by: [name], [YYYY-MM-DD], merge commit: [sha]

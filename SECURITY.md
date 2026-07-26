@@ -41,10 +41,19 @@ In scope:
   appearing to be active. Claude Code treats an unrunnable hook as an error rather
   than a block, so anything that silently breaks the hook is a real bypass. This is
   why `verify-guard.*` exists and why `/framework-doctor` checks it.
-- The **gate receipt being forgeable**: any way to make `--verify` report
-  `RECEIPT: valid` for a tree that did not pass a full gate. The receipt is
-  designed to be evidence an AI cannot fabricate; a way around that defeats
-  Definition of Done item 3.
+- The **gate receipt failing open**: any way to make `--verify` report
+  `RECEIPT: valid` for a tree the gate did not actually pass — a stale receipt
+  accepted as fresh, an unfingerprintable tree treated as a match, a step whose
+  failure is swallowed, or a receipt written when no step ran. These are the
+  bugs that matter, because they defeat Definition of Done item 3 without anyone
+  intending to.
+
+  The receipt is **not** claimed to be unforgeable by hand. The fingerprint is a
+  plain `git write-tree` over a documented exclusion list, computed on the
+  developer's own machine — anyone who can run `git` can reproduce one, and the
+  agent is a party with commit access running on that machine. Reports of the
+  form "I wrote a receipt by hand" describe the design, not a vulnerability. What
+  makes the gate binding is CI, which runs the check the author does not.
 - The shipped `.claude/settings.json` permission allowlist granting materially more
   than it appears to.
 

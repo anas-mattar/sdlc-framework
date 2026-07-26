@@ -60,6 +60,16 @@ json_num() { sed -n "s/.*\"$1\"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p" 
 if [ "$1" = "--verify" ]; then
     [ -f .gate-result.json ] || { echo "RECEIPT: missing — run ./gate.sh"; exit 1; }
     current=$(fingerprint)
+    # Fail closed on an unfingerprintable tree. Every git call in fingerprint() is
+    # silenced, so if they all fail the answer is the literal string "unknown" --
+    # and "unknown" = "unknown" makes the equality below succeed forever, no matter
+    # what changes on disk. The realistic trigger is not "not a repo": it is
+    # `fatal: detected dubious ownership`, the standard Docker/WSL/CI-container
+    # failure. An unverifiable tree is a failure, never a pass.
+    { [ "$current" != "unknown" ] && [ "$(json_str tree)" != "unknown" ]; } || {
+        echo "RECEIPT: unverifiable — the working tree could not be fingerprinted."
+        echo "  Run 'git status': 'detected dubious ownership' is the usual cause in Docker, WSL and CI containers."
+        exit 1; }
     [ "$(json_str tree)" = "$current" ] || {
         echo "RECEIPT: stale — the working tree changed after the gate ran; re-run ./gate.sh"; exit 1; }
     [ "$(json_str mode)" = "full" ] || {
@@ -80,6 +90,14 @@ fi
 
 if [ "$1" = "--min" ]; then mode="min"; else mode="full"; fi
 tree=$(fingerprint)
+# A receipt naming a tree that could not be read is not evidence -- it is a
+# permanently-valid pass. Refuse to write one, and fail the gate.
+if [ "$tree" = "unknown" ]; then
+    echo "GATE: the working tree could not be fingerprinted — no receipt written."
+    echo "  Run 'git status': 'detected dubious ownership' is the usual cause in Docker, WSL and CI containers."
+    echo "EXIT: 1"
+    exit 1
+fi
 cat > .gate-result.json <<EOF
 {
   "exit": $code,

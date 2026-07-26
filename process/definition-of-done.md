@@ -81,5 +81,13 @@ with another:
 | 5 | Rule violations no build catches (security, layering, migrations) |
 | 6 | Everything mechanical passing while the behavior is still wrong |
 
-Items 3 and 6 are the load-bearing ones: 3 is the only item backed by evidence an
-AI cannot fabricate, and 6 is the only item a machine cannot perform at all.
+Items 3 and 6 are the load-bearing ones: 3 is the only item backed by machine
+evidence rather than assertion, and 6 is the only item whose judgement a machine
+cannot perform at all.
+
+Be precise about what item 3's evidence covers. The receipt proves *which working
+tree* the gate ran against, so a pass cannot be carried over to a tree that has
+since changed, and a green result cannot be transcribed by hand. It does not prove
+that the gate script itself was honest, and it is not a defence against a party
+with commit access on the machine — which includes the agent. That is what CI is
+for: a check the author does not run. See `SECURITY.md` for the threat model.

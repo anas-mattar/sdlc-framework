@@ -66,12 +66,15 @@ the phase's review notes; any FAIL blocks the phase.
 - [ ] No new `dangerouslySetInnerHTML` with dynamic content.
 - [ ] Lists are paginated or justified-bounded; loading/empty/error states exist;
       search inputs debounced.
-- [ ] No new packages beyond those approved in the feature's `plan.md`.
+- [ ] No new packages beyond those approved in the feature's `plan.md` (or
+      `spec.md` at Small tier, which ships no `plan.md`).
 
 ## Process
 
 - [ ] Only the approved phase's files changed (`git diff --stat` reviewed).
-- [ ] Gate run by the user with confirmed exit code 0.
+- [ ] The gate receipt reports `RECEIPT: valid` for the current tree. A pasted
+      exit code does not satisfy this, and neither does a stale, `min`, or missing
+      receipt — see `docs/process/definition-of-done.md` item 3.
 
 ## Project-Specific Rules (define per project in docs/project/)
 

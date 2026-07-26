@@ -27,6 +27,10 @@ echo "--- gate receipt contract ---------------------------------------"
 sh tests/receipt-contract.sh || code=1
 echo
 
+echo "--- powershell gate behaviour -----------------------------------"
+sh tests/gate-powershell.sh || code=1
+echo
+
 echo "================================================================"
 if [ "$code" -eq 0 ]; then
     echo " all self-tests passed"

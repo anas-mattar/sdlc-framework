@@ -1,5 +1,5 @@
 {
-  "$comment": "Copy into <project>/.claude/settings.json. The package guard ships with the Windows/PowerShell command because that is the platform where the POSIX form fails OPEN: if `sh` is absent the hook exits 127, which is a hook ERROR, not a block, so the guard silently stops guarding. On macOS/Linux swap the hook command for: sh .claude/hooks/guard-packages.sh. Whichever you use, run .claude/hooks/verify-guard.ps1 (or verify-guard.sh) after install — it proves the guard actually blocks instead of assuming it does. Extend the allowlist with project-specific read-only commands as prompts appear.",
+  "$comment": "Copy into <project>/.claude/settings.json. TWO guards ship: guard-packages watches Edit/Write against manifest FILES, and guard-installs watches Bash for the install COMMANDS that rewrite those same manifests (npm i, dotnet add package, pip install, go get). Both are needed — the file guard alone covers the least likely path. Both ship with the Windows/PowerShell command because that is the platform where the POSIX form fails OPEN: if `sh` is absent the hook exits 127, which is a hook ERROR, not a block, so the guard silently stops guarding. On macOS/Linux swap the hook commands for: sh .claude/hooks/guard-packages.sh and sh .claude/hooks/guard-installs.sh. Whichever you use, run .claude/hooks/verify-guard.ps1 (or verify-guard.sh) after install — it proves the guard actually blocks instead of assuming it does. Extend the allowlist with project-specific read-only commands as prompts appear.",
   "permissions": {
     "allow": [
       "Bash(git status:*)",
@@ -19,11 +19,20 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write",
+        "matcher": "Edit|MultiEdit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
             "command": "powershell -NoProfile -File .claude/hooks/guard-packages.ps1"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -File .claude/hooks/guard-installs.ps1"
           }
         ]
       }

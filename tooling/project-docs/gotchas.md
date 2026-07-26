@@ -8,10 +8,10 @@ project for AI-assisted work.
 Format: one bullet per gotcha, stating the trap and the correct behavior.
 
 <!-- Examples of the kind of entry that belongs here (from another project):
-- Package id `DPO.Batches.Clinet` is really misspelled — it is the actual package id, do not "fix" it.
+- Package id `Acme.Batches.Clinet` is really misspelled — it is the actual package id, do not "fix" it.
 - The stray `bun.lock` is not authoritative; the project uses Yarn 4 via corepack.
 - The middleware file is `src/proxy.ts`, not `middleware.ts`.
-- Directory `purshase-order` is misspelled on purpose — never create a corrected parallel directory.
+- Directory `custmer-orders` is misspelled on purpose — never create a corrected parallel directory.
 -->
 
 - (none yet)

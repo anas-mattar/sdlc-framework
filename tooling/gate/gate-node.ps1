@@ -73,6 +73,15 @@ function Get-GateFingerprint {
 
 function Write-GateReceipt([int]$Code, [string]$Mode) {
     $tree = Get-GateFingerprint
+    # A receipt naming a tree that could not be read is not evidence -- it is a
+    # permanently-valid pass, because "unknown" -eq "unknown" on every later
+    # -Verify. Refuse to write one, and fail the gate.
+    if ($tree -eq "unknown") {
+        Write-Host "GATE: the working tree could not be fingerprinted -- no receipt written."
+        Write-Host "  Run 'git status': 'detected dubious ownership' is the usual cause in Docker, WSL and CI containers."
+        Write-Host "EXIT: 1"
+        exit 1
+    }
     $head = git rev-parse HEAD 2>$null | Select-Object -First 1
     if (-not $head) { $head = "unknown" }
     $utc = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -98,6 +107,13 @@ if ($Verify) {
     if (-not (Test-Path ".gate-result.json")) { Write-Host "RECEIPT: missing -- run ./gate.ps1"; exit 1 }
     $r = Get-Content ".gate-result.json" -Raw | ConvertFrom-Json
     $current = Get-GateFingerprint
+    # Fail closed on an unfingerprintable tree -- see the note in Write-GateReceipt.
+    # An unverifiable tree is a failure, never a pass.
+    if ($current -eq "unknown" -or $r.tree -eq "unknown") {
+        Write-Host "RECEIPT: unverifiable -- the working tree could not be fingerprinted."
+        Write-Host "  Run 'git status': 'detected dubious ownership' is the usual cause in Docker, WSL and CI containers."
+        exit 1
+    }
     if ($r.tree -ne $current) {
         Write-Host "RECEIPT: stale -- the working tree changed after the gate ran; re-run ./gate.ps1"; exit 1
     }
@@ -114,8 +130,37 @@ if ($Verify) {
 
 if ($Min) { $Steps = @(, $Steps[0]) }
 
+# PowerShell flattens @( @("yarn", "build") ) to @("yarn", "build"), so a project
+# that trims its gate to ONE step gets an array of strings rather than an array of
+# steps -- and the loop below would iterate over the characters of its own command
+# name and report 127. If the first element is a string, the whole list is one
+# step. (The -Min line above already uses the unary comma for the same reason.)
+if ($Steps.Count -gt 0 -and $Steps[0] -is [string]) { $Steps = @(, $Steps) }
+
+# --- step runner (identical in both .ps1 gates -- do not let it diverge) ---
+# $LASTEXITCODE is set ONLY by a native executable. If `yarn` cannot be resolved,
+# PowerShell raises a CommandNotFoundException, the loop carries on, and
+# $LASTEXITCODE is still $null. $null -ne 0 is true so it breaks; [int]$null is 0;
+# and `exit $null` exits 0. A gate that ran no steps at all then reports EXIT: 0
+# and writes a receipt that -Verify calls valid -- the primary control failing
+# OPEN, silently, on the platform settings.json treats as primary. So: reset
+# before every step, catch the exception, and treat "no exit code" as 127.
+#
+# A step that resolves to a cmdlet or function rather than a native executable
+# also leaves $LASTEXITCODE $null and is therefore reported as 127. That is
+# deliberate -- the gate runs build tools, and guessing is what got us here.
 foreach ($step in $Steps) {
-    & $step[0] $step[1..($step.Length - 1)]
+    $global:LASTEXITCODE = $null
+    try {
+        & $step[0] $step[1..($step.Length - 1)]
+    } catch {
+        Write-Host "GATE: cannot run '$($step[0])' -- $($_.Exception.Message)"
+        $global:LASTEXITCODE = 127
+    }
+    if ($null -eq $LASTEXITCODE) {
+        Write-Host "GATE: '$($step[0])' produced no exit code -- treating as failure. Is it installed and on PATH?"
+        $global:LASTEXITCODE = 127
+    }
     if ($LASTEXITCODE -ne 0) { break }
 }
 $code = $LASTEXITCODE

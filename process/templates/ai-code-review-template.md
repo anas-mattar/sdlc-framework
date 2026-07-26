@@ -104,7 +104,10 @@ Notes: [list any reverted stragglers]
 
 - [ ] Phase is revertible with `git revert` of its commit(s).
 - [ ] Rollback would not physically delete or corrupt posted transactional records.
-- [ ] `rollback.md` updated if this phase changes rollback steps.
+- [ ] Large tier only: the feature's `specs/feature/NNN-<name>/rollback.md` is
+      updated if this phase changes rollback steps. Small and Medium tiers ship no
+      per-feature rollback doc — mark N/A. The rules that govern any rollback live
+      in `docs/process/rollback-process.md` and are not restated here.
 
 Notes:
 

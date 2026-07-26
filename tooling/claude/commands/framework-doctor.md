@@ -6,7 +6,7 @@ observe, do not infer.
 
 The failure this exists to catch is **silent half-adoption** — the docs land, the
 tooling doesn't, and nobody notices because prose does not announce that it stopped
-being enforced (`docs/process/../ADOPTION.md` → *Anti-Patterns*).
+being enforced (`ADOPTION.md` → *Anti-Patterns*).
 
 ## Checks
 

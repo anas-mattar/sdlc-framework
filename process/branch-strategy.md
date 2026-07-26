@@ -52,6 +52,7 @@ spec dir:   specs/feature/NNN-<name>/
             ├─ research.md            (optional)
             ├─ data-model.md          (optional)
             ├─ contracts/             (optional)
+            ├─ rollback.md            (Large tier -- per-feature rollback plan)
             ├─ notes.md               (optional)
             ├─ screenshots/           (optional)
             └─ checklists/            (optional)

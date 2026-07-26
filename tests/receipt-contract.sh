@@ -42,15 +42,25 @@ echo ".gate-result.json"         > .gitignore
 git add -A
 git commit -qm "baseline"
 
-# Install the real gate script, stubbing only the build/test commands.
+# Install the real gate script, stubbing the build/test COMMANDS -- never whole
+# lines. This fixture used to replace the entire `yarn check && yarn test` line,
+# which meant the shell operators joining those commands were supplied by the test
+# rather than read from the gate. A regression written into gate-node.sh -- `|| true`
+# appended, or `;` in place of `&&`, the textbook status-swallowing bug -- was
+# substituted away before it could be observed, and the suite reported 18/18 PASS.
+# Replacing only the command words leaves the operators in place, so the shape of
+# the real gate line is under test.
 sed -e 's/^yarn build$/eval "${GATE_BUILD:-true}"/' \
-    -e 's/^    yarn check \&\& yarn test.*$/    eval "${GATE_TEST:-true}"/' \
+    -e 's/yarn check/eval "${GATE_CHECK:-true}"/' \
+    -e 's/yarn test/eval "${GATE_TEST:-true}"/' \
     "$ROOT/tooling/gate/gate-node.sh" > gate.sh
 chmod +x gate.sh
-if ! grep -q 'GATE_BUILD' gate.sh; then
-    echo "SETUP FAILED: could not stub gate-node.sh -- did its build steps change?"
-    exit 1
-fi
+for v in GATE_BUILD GATE_CHECK GATE_TEST; do
+    if ! grep -q "$v" gate.sh; then
+        echo "SETUP FAILED: could not stub $v in gate-node.sh -- did its build steps change?"
+        exit 1
+    fi
+done
 
 # --- helpers ---------------------------------------------------------------
 gate()  { ./gate.sh "$@" >/dev/null 2>&1; }
@@ -127,6 +137,38 @@ check "failed gate is rejected"                    1
 gate
 rm -f .gate-result.json
 check "deleted receipt is rejected"                1
+
+# --- the compound step keeps its && semantics ------------------------------
+# Every step of the gate must be able to fail the gate, and a failing step must
+# stop the ones after it. `|| true`, `; ` instead of `&&`, or a `tee` swallowing
+# the status all break this, and all of them look harmless in a diff. The test
+# step touches a marker file, so "did it run" is observable rather than inferred.
+rm -f ran-test
+GATE_CHECK=false GATE_TEST='touch ran-test' ./gate.sh >/dev/null 2>&1
+check "failing lint step is not swallowed"         1
+if [ -f ran-test ]; then
+    fail=$((fail + 1)); echo "  FAIL  the test step ran after lint failed -- && semantics lost"
+else
+    pass=$((pass + 1)); echo "  PASS  the test step is skipped when lint fails"
+fi
+
+# The mirror image: with lint green the test step must actually run. Without this,
+# a gate that silently skipped its tests would satisfy every assertion above.
+rm -f ran-test
+GATE_CHECK=true GATE_TEST='touch ran-test' ./gate.sh >/dev/null 2>&1
+if [ -f ran-test ]; then
+    pass=$((pass + 1)); echo "  PASS  the test step runs when lint passes"
+else
+    fail=$((fail + 1)); echo "  FAIL  the test step never ran -- the gate is not running its own steps"
+fi
+rm -f ran-test
+gate
+
+# A failing TEST step must fail the gate too -- the last command in the chain is
+# the one whose status the gate reports, so it is the easiest to lose.
+GATE_TEST=false ./gate.sh >/dev/null 2>&1
+check "failing test step is not swallowed"         1
+gate
 
 # --- the gate must not disturb the developer's index -----------------------
 gate

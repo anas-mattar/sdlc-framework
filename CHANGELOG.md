@@ -26,6 +26,99 @@ including detection of local edits that an upgrade would overwrite.
 
 ---
 
+## 2.3.0 (unreleased)
+
+**Fail-closed release.** Four controls reported success while doing nothing. Each
+was a place where the framework wrote prose and skipped the mechanism — the exact
+failure its own first design principle warns against — so the fixes come with the
+self-tests that would have caught them.
+
+### The controls that failed open
+
+| Was | Now |
+|---|---|
+| `gate.ps1` reported `EXIT: 0` and wrote a **valid** receipt when `yarn`/`dotnet` was not on PATH. `$LASTEXITCODE` is set only by a native executable; an unresolvable command left it `$null`, and `[int]$null` is `0`. | Each step resets `$LASTEXITCODE`, catches `CommandNotFoundException`, and treats "no exit code" as `127`. A Windows and a Linux developer now get the same verdict on the same commit. |
+| An unfingerprintable tree recorded `"tree": "unknown"` — and `"unknown" = "unknown"` made that receipt valid **forever**, whatever changed on disk. Triggered by `fatal: detected dubious ownership`, the standard Docker/WSL/CI-container failure. | The gate refuses to write a receipt it cannot fingerprint, and `--verify` reports `RECEIPT: unverifiable` and exits 1. |
+| The package guard's approval marker, its `settings.json`, and its own hook script were **not guarded** — and the block message named the marker to create. Two `Write` calls disabled it. | The guard blocks writes to `.claude/allow-package-changes`, `.claude/settings*.json` and `.claude/hooks/*` before anything else, with its own message. |
+| The guard matched case-sensitively on POSIX and case-insensitively on Windows. On case-insensitive macOS — where this framework directs users to the `.sh` hook — `Package.json` wrote the real manifest straight past it. | Both guards fold case. Windows paths arriving with doubled backslashes now normalise correctly too. |
+
+### New: the install guard
+
+`guard-packages.*` only ever watched `Edit`/`Write` against manifest **files** —
+the least likely way an agent adds a dependency. `npm i`, `yarn add`,
+`dotnet add package`, `pip install`, `go get` and `cargo add` are `Bash` calls the
+file guard never saw, so a project could run reporting `GUARD: verified` with
+every real install path open. `guard-installs.sh` / `.ps1` closes it: 46 command
+forms, the same approval marker, the same exit codes.
+
+### Self-tests: 34 assertions → 56
+
+The suite passed while examining almost nothing. Each of these is a check that
+now tests what the README already claimed it tested:
+
+- **The internal-link check validated 0 of 218 references.** It searched for
+  `](file.md)` markdown links; the repo contains none and hundreds of backticked
+  paths. It iterated an empty set and printed `PASS`. Rewritten to resolve
+  backticked paths through the installed→upstream map, ratcheted at 0.
+- **The layer-discipline check grepped five strings from one former codebase** —
+  a regression test against a past mistake, unable to detect a new product name,
+  language or tool, while the README claimed layer discipline was "enforced".
+  Replaced with structural assertions: layer 1 references no `stacks/` path, uses
+  no language-tagged code fence, and names no stack toolchain. The vocabulary
+  ratchet is kept for what it is, and now scans `tooling/` as well.
+- **`receipt-contract.sh` stubbed out the whole `yarn check && yarn test` line**,
+  so the shell operators joining the steps came from the test rather than the
+  gate. Injecting `|| true` into the real gate yielded 18/18 PASS. Now only the
+  command *words* are stubbed, and four assertions cover `&&` semantics in both
+  directions.
+- **The two `.ps1` gates had zero behavioural tests** — which is how the
+  `EXIT: 0` bug shipped. New `tests/gate-powershell.sh`: 11 assertions, including
+  the missing-toolchain and unfingerprintable-tree arms.
+- **No tags now FAILs in CI** rather than skipping. A skipped check in CI is a
+  check that is not running.
+- New ratchet: no document outside `gate-command.md` may offer an exit code as
+  gate evidence. This is what let a MANDATORY stack checklist keep saying
+  "confirmed exit code 0" for two releases after v2.0.0 removed it.
+
+### Corrected claims
+
+The README said the receipt is evidence an AI "cannot fabricate". The fingerprint
+is a plain `git write-tree` over a documented exclusion list, computed on the
+developer's own machine, and the agent is a party with commit access on that
+machine. The receipt defends against **staleness and transcription error**; CI is
+what makes the gate binding. `README.md`, `process/definition-of-done.md` and
+`SECURITY.md` now say so. Overstating the one hard guarantee teaches people to
+stop checking the others.
+
+### Also fixed
+
+- `rollback.md` was required by two mandatory checklists and shipped nowhere. It
+  is a Large-tier per-feature artifact; it is now named as such in
+  `branch-strategy.md`'s spec-directory listing, and both templates reference it
+  explicitly and conditionally.
+- `.gitattributes` pins `*.ps1` to CRLF and `*.sh`/`*.md` to LF, and the ASCII
+  check strips `\r` before testing — so a Windows checkout no longer reports a
+  line-ending style as an encoding defect.
+- The `stacks/nextjs-trpc` checklist's package rule now names `spec.md` at Small
+  tier, which ships no `plan.md`.
+- Warehouse-project vocabulary removed from `gate-dotnet.sh` and `gotchas.md`.
+
+### Upgrade actions
+
+| File | Action |
+|---|---|
+| `tooling/gate/gate-node.sh`, `gate-dotnet.sh`, `gate-node.ps1`, `gate-dotnet.ps1` | **Merge** — you edited the step commands. Take the receipt-machinery and step-runner hunks; keep your steps. `gate-dotnet.ps1` now uses a `$Steps` array like the Node gate. |
+| `tooling/claude/hooks/guard-installs.sh`, `.ps1` | **Install** — new files. |
+| `tooling/claude/hooks/guard-packages.sh`, `.ps1` | **Copy** |
+| `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. |
+| `process/*`, `stacks/nextjs-trpc/compliance-checklist.md` | **Copy** |
+| `README.md`, `SETUP.md`, `SECURITY.md`, `CHANGELOG.md`, `VERSION`, `tests/*`, `.gitattributes` | **None** — upstream only. |
+
+After upgrading, re-run `verify-guard` and confirm **both** hooks are wired: a
+project that installs only the file guard has the install path standing open.
+
+---
+
 ## 2.2.0
 
 **Breaking — the receipt now fingerprints requirements, and status moves to its

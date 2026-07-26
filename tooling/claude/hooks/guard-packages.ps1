@@ -30,6 +30,26 @@ if (-not $filePath) { exit 0 }
 $name = ($filePath -split '[\\/]')[-1]
 if (-not $name) { exit 0 }
 
+# --- the guard guards itself ------------------------------------------------
+# Everything this control depends on lives inside the perimeter the agent
+# controls: the approval marker, the hook configuration, and the hook script. None
+# of them is a package manifest, so without this block a blocked agent can simply
+# Write `.claude/allow-package-changes` -- whose exact filename the block message
+# below helpfully supplies -- and the guard is permanently open in one tool call.
+# /framework-doctor check 5 finds the residue afterwards, but it runs after setup
+# and after upgrade, never during phase work, and the marker can be deleted once
+# the edit has landed. So the block has to be here, at the moment of the write.
+# Claude Code reports Windows paths with backslashes, and they may arrive doubled,
+# so fold and then squeeze the repeats -- otherwise none of the patterns below
+# match on the platform this guard is shipped configured for.
+$norm = ($filePath -replace '\\', '/') -replace '/+', '/'
+foreach ($self in @('*.claude/allow-package-changes', '*.claude/settings*.json', '*.claude/hooks/*')) {
+    if ($norm -like $self) {
+        [Console]::Error.WriteLine("BLOCKED: '$filePath' is part of the package guard itself (its approval marker, its configuration, or its hook script). Only a human creates or edits these. If package changes are genuinely approved in the feature's plan.md (or spec.md at Small tier), ask the user to create the marker -- do not create it yourself.")
+        exit 2
+    }
+}
+
 $guarded = @(
 # GUARDED-MANIFESTS-BEGIN
     'package.json', 'package-lock.json', 'npm-shrinkwrap.json', 'yarn.lock',

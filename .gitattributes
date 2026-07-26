@@ -1,0 +1,30 @@
+# Line endings are pinned, not left to each clone's core.autocrlf.
+#
+# Without this file, a Windows clone with core.autocrlf=true checks .ps1 and .sh
+# files out as CRLF. The .sh case breaks any hook run through a POSIX shell (a
+# `\r` on the shebang line, or trailing every command). The .ps1 case is subtler:
+# tests/framework-checks.sh treats `\r` as a non-ASCII byte, so the whole suite
+# goes red on a file whose actual content is clean -- and CONTRIBUTING.md's first
+# instruction is to run that suite, so a new contributor sees a failure they did
+# not cause. A check that cries wolf trains people to ignore it, which is the
+# failure mode framework-upgrade.md names better than anyone.
+#
+# PowerShell wants CRLF and POSIX shells want LF, so pin each to what it needs.
+
+*           text=auto eol=lf
+*.ps1       text eol=crlf
+*.psm1      text eol=crlf
+*.psd1      text eol=crlf
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.sh        text eol=lf
+*.md        text eol=lf
+*.json      text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+*.png       binary
+*.jpg       binary
+*.gif       binary
+*.pdf       binary
+*.ico       binary

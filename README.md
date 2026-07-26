@@ -29,8 +29,10 @@ Supported by four ideas most teams never formalize:
    invents a layout.
 3. **Numbered rules** — every rule has an ID (B1, DB4, F12…) so reviews can cite them.
 4. **Gate receipts** — the gate writes a fingerprint of the exact tree it verified,
-   so "it passed" is evidence an AI can check and cannot fabricate, rather than a
-   number someone transcribed (`process/gate-command.md`).
+   so "it passed" is checkable evidence about *which* tree passed, rather than a
+   number someone transcribed (`process/gate-command.md`). It defends against
+   staleness and transcription error; it is not a defence against a party with
+   commit access, and CI is what makes the gate binding (`SECURITY.md`).
 
 ## The Three-Layer Model
 
