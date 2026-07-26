@@ -2,7 +2,7 @@
 
 > Stack layer (Layer 2) rules: EF Core + SQL Server migrations (DB1–DB4) plus mandatory
 > stack defaults for new database work. Rule ids are stable — reviews cite them; never
-> renumber. For DB5–DB13 and BP2–BP3, see `docs/stack-backend/database-best-practices.md`.
+> renumber. For DB5–DB13 and BP2–BP3, see `docs/stacks/<backend>/database-best-practices.md`.
 
 ---
 

@@ -30,7 +30,7 @@ Supported by four ideas most teams never formalize:
 3. **Numbered rules** — every rule has an ID (B1, DB4, F12…) so reviews can cite them.
 4. **Gate receipts** — the gate writes a fingerprint of the exact tree it verified,
    so "it passed" is checkable evidence about *which* tree passed, rather than a
-   number someone transcribed (`process/gate-command.md`). It defends against
+   number someone transcribed (`process/core/gate-command.md`). It defends against
    staleness and transcription error; it is not a defence against a party with
    commit access, and CI is what makes the gate binding (`SECURITY.md`).
 
@@ -65,8 +65,16 @@ manifest and lockfile patterns across every mainstream ecosystem, whether or not
 layer-2 rules exist for it — a guard that quietly ignores `go.mod` is worse than
 no guard, because it reports itself as verified.
 
-So a third stack costs one rules folder (the real work), plus a few lines in the
-gate script and CI file.
+So a third stack costs one rules folder — the real work — plus a gate script and a
+CI toolchain block. Start from `stacks/TEMPLATE/`, which states the file contract;
+the two shipped stacks do not agree on it (one has `architecture-rules.md` with 36
+numbered rules, the other `rules.md` with 8), so inferring the shape from them is
+not a fair ask.
+
+Installed stacks live at `docs/stacks/<name>/`, one directory per stack, named
+after the stack. There is no limit of two and no requirement that they be a backend
+and a frontend — a project can carry `docs/stacks/go-api/`,
+`docs/stacks/swift-ios/` and `docs/stacks/nextjs-trpc/` at once.
 
 ## Repository Structure
 
@@ -83,22 +91,27 @@ sdlc-framework/
 ├── CLAUDE.md.template         # generates the consuming project's CLAUDE.md
 ├── examples/
 │   └── minimal-node/          # what a Small-tier solo install actually looks like
-├── process/                   # LAYER 1 — copy into every project
-│   ├── project-rules.md       # spec-first, one-phase-only, branch/commit/review rules
-│   ├── gate-command.md        # the gate contract (delegates to gate scripts)
-│   ├── review-process.md
-│   ├── rollback-process.md
-│   ├── branch-strategy.md
-│   ├── repository-strategy.md # incl. multi-repo wrapper pattern (optional module)
-│   ├── deployment-standards.md
-│   ├── definition-of-done.md
-│   ├── source-artifacts.md    # authority + derivation rules for guides/prototypes/roadmaps
-│   ├── team-workflow.md       # multi-developer coordination (ownership, CI gate, peer review)
-│   ├── orchestration.md       # OPTIONAL — boundaries for multi-agent AI work
-│   └── templates/             # AI + human review checklists
+├── process/                   # LAYER 1 — bucketed by what a project earns.
+│   │                          #   All buckets install FLAT into docs/process/.
+│   ├── core/                  # always copied
+│   │   ├── project-rules.md   # spec-first, one-phase-only, branch/commit/review rules
+│   │   ├── gate-command.md    # the gate contract (delegates to gate scripts)
+│   │   ├── definition-of-done.md
+│   │   ├── branch-strategy.md
+│   │   ├── rollback-process.md
+│   │   ├── review-process.md
+│   │   └── source-artifacts.md  # authority + derivation for guides/prototypes/roadmaps
+│   ├── team/                  # copied when Q5 says 2+ developers
+│   │   └── team-workflow.md   # ownership, claim commits, CI gate, reviewer ≠ owner
+│   ├── optional/              # copied per Q2/Q4 and whether you run agent workflows
+│   │   ├── repository-strategy.md # multi-repo wrapper pattern
+│   │   ├── orchestration.md   # boundaries for multi-agent AI work
+│   │   └── deployment-standards.md # PLACEHOLDER — fill it or skip it
+│   └── templates/             # AI + human review checklists → specs/_templates/
 ├── modules/
 │   └── contracts/             # OPTIONAL — external API/webhook/auth integration patterns
-├── stacks/                    # LAYER 2 — copy the one(s) you use
+├── stacks/                    # LAYER 2 — copy the one(s) you use, keeping the name
+│   ├── TEMPLATE/              # the file contract for a new stack — start here
 │   ├── dotnet-api/            # ASP.NET Core Web API + EF Core + SQL Server
 │   └── nextjs-trpc/           # Next.js App Router + tRPC + NextAuth + shadcn/ui
 └── tooling/                   # ships BEHAVIOR, not prose — copy alongside the docs
@@ -111,6 +124,7 @@ tests/                         # the framework's own regression tests
     run-all.ps1                #   Windows launcher for the same script (not a second suite)
     framework-checks.sh        #   static consistency (encoding, syntax, links, layers, tags)
     receipt-contract.sh        #   the gate receipt contract, both directions
+    gate-powershell.sh         #   the .ps1 gates' behaviour, incl. the fail-open cases
 ```
 
 ## Installed Layout (in a consuming project)
@@ -129,8 +143,9 @@ inside the docs assume this layout:
 ├── .claude/                   # from tooling/claude (settings, hooks, commands)
 ├── docs/
 │   ├── process/               # ← process/
-│   ├── stack-backend/         # ← stacks/<backend-stack>/   (if applicable)
-│   ├── stack-frontend/        # ← stacks/<frontend-stack>/  (if applicable)
+│   ├── stacks/                # ← stacks/<name>/ per stack, folder name kept
+│   │   ├── <stack-a>/         #   as many as the project has — not limited to two,
+│   │   └── <stack-b>/         #   and not required to be backend + frontend
 │   ├── contracts/             # ← modules/contracts/        (if applicable)
 │   ├── project/               # LAYER 3 — starts empty, grows with the project
 │   ├── business/              # source artifacts: guides/manuals (+ md extraction)
@@ -140,13 +155,13 @@ inside the docs assume this layout:
 └── specs/                     # per-feature artifacts (Spec Kit layout)
     └── feature/
         └── NNN-<name>/        # spec.md, plan.md, tasks.md, status.md, screenshots/, …
-                               #   mirrors the branch name — `process/branch-strategy.md`
+                               #   mirrors the branch name — `process/core/branch-strategy.md`
                                #   is authoritative on this path
 ```
 
 Both `status.md` files exist because the gate receipt fingerprints requirements
 but not status: ticking a phase complete after the gate must not invalidate it,
-while changing what the phase was required to do must (`process/gate-command.md`).
+while changing what the phase was required to do must (`process/core/gate-command.md`).
 
 ## Scope Tiers
 
@@ -165,8 +180,8 @@ mistake cost?**
 | Multi-repo wrapper | ❌ | usually ❌ | ✅ |
 
 `SETUP.md` walks you through picking a tier; the answer is recorded in the
-project's `CLAUDE.md` (`Scope tier:`), and `process/project-rules.md` and
-`process/definition-of-done.md` read from it.
+project's `CLAUDE.md` (`Scope tier:`), and `process/core/project-rules.md` and
+`process/core/definition-of-done.md` read from it.
 
 No tier removes the human from the loop — what varies is **who** that human is.
 On a team, review means a peer other than the feature's owner. Solo, it means the

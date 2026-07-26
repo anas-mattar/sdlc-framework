@@ -13,7 +13,7 @@
 - [ ] **Projects must re-copy files** — listed below, and recorded in the
       `CHANGELOG.md` entry:
 
-<!-- e.g. process/definition-of-done.md → docs/process/ -->
+<!-- e.g. process/core/definition-of-done.md → docs/process/ -->
 
 ## Checklist
 

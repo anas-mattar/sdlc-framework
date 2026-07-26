@@ -2,7 +2,7 @@
 #
 # Runs `tests/run-all.sh` -- the exact script a developer runs locally, per the
 # framework's own rule that CI must not have a separate command chain
-# (process/team-workflow.md section 3).
+# (process/team/team-workflow.md section 3).
 #
 # This repo ships enforcement to other projects. Until this workflow existed, none
 # of that enforcement was itself enforced: the receipt contract and the encoding

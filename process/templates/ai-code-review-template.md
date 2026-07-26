@@ -8,7 +8,7 @@
 |-------|-------|
 | Feature | `feature/[NNN-name]` |
 | Phase | [N] — [phase title from tasks.md] |
-| Repositories touched | [{{BACKEND_DIR}} / {{FRONTEND_DIR}} / specs] |
+| Repos / stacks touched | [repo → `docs/stacks/<name>/`, one per stack this phase touches] |
 | Branch(es) | [feature/... per repo] |
 | Reviewed commit(s) | [sha(s)] |
 | Review date | [YYYY-MM-DD] |
@@ -32,47 +32,41 @@ Notes: [deviations found, or "none"]
 
 Notes:
 
-## 3. Backend Rules
+## 3. Stack Rules
 
-*Skip only if this phase does not touch the backend repo.*
+**Repeat this section once per stack this phase touches.** A project installs one
+directory per stack under `docs/stacks/`, however many it has — this is not a
+backend-and-frontend pair. A phase may touch one stack, several, or none.
 
-- [ ] Controllers/handlers follow the project's error-handling conventions; domain
-      exceptions used for error paths (per `docs/stack-backend/` rules).
-- [ ] Repositories/DI follow the existing wiring patterns; no new patterns
-      without `plan.md` approval.
-- [ ] New tables follow the mandatory database standards (PK convention, soft
-      delete, audit fields).
-- [ ] Async patterns, N+1 prevention, and index considerations checked.
+### Stack: `docs/stacks/[name]/`
 
-Notes:
-
-## 4. Frontend Rules
-
-*Skip only if this phase does not touch the frontend repo.*
-
-- [ ] All data access goes through the approved data path (e.g. BFF procedures with
-      auth-protected variants); no direct backend fetches from UI code.
-- [ ] Forms follow the project's mandatory form stack (schema-validated, no manual
-      per-field `useState`-style state).
-- [ ] Tables compose the shared table base components; no hand-rolled table markup.
-- [ ] Schemas and types live in their designated directories; existing directory
-      names kept (even misspelled ones).
-- [ ] **`docs/stack-frontend/compliance-checklist.md` completed and passing.**
+- [ ] The numbered rules in that stack's `rules.md` are followed; any deviation
+      cites the rule ID and says why.
+- [ ] No new architectural pattern was introduced without `plan.md` approval —
+      existing wiring, layering and directory conventions were followed, including
+      names that are misspelled on purpose (`docs/project/gotchas.md`).
+- [ ] Data access goes through the stack's approved path; nothing bypasses it.
+- [ ] Schema or persistence changes follow that stack's database rules, where it
+      ships them (PK convention, soft delete, audit fields).
+- [ ] **That stack's `compliance-checklist.md` completed and passing — where the
+      stack ships one.** A stack with no checklist is N/A, not a FAIL: the
+      checklist is optional in the stack contract (`stacks/TEMPLATE/rules.md`).
 
 Notes:
 
-## 5. Security
+## 4. Security
 
 - [ ] Authorization enforced server-side (permission checks / protected procedures);
       client-side permission checks are UX only.
 - [ ] No secrets committed, copied, logged, or documented; no secrets or backend
       URLs in client-exposed variables.
 - [ ] Sensitive data exposure, file uploads, and webhook validation reviewed per
-      `docs/stack-frontend/` security rules and `docs/contracts/`.
+      the security rules of each stack this phase touches (`docs/stacks/<name>/`,
+      where that stack ships them) and `docs/contracts/`.
 
 Notes:
 
-## 6. Tests
+## 5. Tests
 
 - [ ] **For each acceptance criterion this phase touches, name the test that would
       fail if it regressed.** Fill the table below. A criterion with no such test
@@ -88,32 +82,32 @@ Notes:
 - [ ] The stub ratchet passes (`./check-stubs.sh`). Any `TODO`, `FIXME` or
       `NotImplementedException` this phase added is either implemented or carries
       `approved-stub: <where the spec defers it>`.
-- [ ] Backend: project test framework with isolated per-test database/fixtures; each
-      test class documents the business rule under test.
-- [ ] Frontend: unit tests; e2e tests where the phase adds user flows.
+- [ ] Tests use each stack's own conventions — isolated per-test fixtures where the
+      stack persists data, e2e coverage where the phase adds a user flow. Each test
+      states the business rule it protects.
 - [ ] No tests weakened, skipped, or deleted to make the gate pass.
 
 Notes:
 
-## 7. Migrations
+## 6. Migrations
 
 *Skip only if this phase has no schema change.*
 
 - [ ] Migration lives in the project's migrations directory, named per the database
-      rules (`docs/stack-backend/`).
+      rules of the stack that owns the schema (`docs/stacks/<name>/`).
 - [ ] Change is additive; no dropped tables/columns without explicit approval.
 - [ ] Data migration (if any) is reversible and preserves transactional records.
 
 Notes:
 
-## 8. Unrelated Changes
+## 7. Unrelated Changes
 
 - [ ] `git diff --stat` shows only files this phase intended to change.
 - [ ] No refactors of unrelated files, no unrelated features, no unapproved packages.
 
 Notes: [list any reverted stragglers]
 
-## 9. Rollback Safety
+## 8. Rollback Safety
 
 - [ ] Phase is revertible with `git revert` of its commit(s).
 - [ ] Rollback would not physically delete or corrupt posted transactional records.

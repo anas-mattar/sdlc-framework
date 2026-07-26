@@ -62,7 +62,7 @@ Out of scope:
 - Vulnerabilities in a *consuming* project's own code. The framework does not
   review your dependencies.
 - The claim-commit exemption allowing direct pushes to `main`
-  (`process/team-workflow.md` §2a). This is a documented, deliberate trade-off
+  (`process/team/team-workflow.md` §2a). This is a documented, deliberate trade-off
   limited to a single roadmap line; if your organization forbids it, use the
   tracker-ID scheme instead.
 - A developer choosing not to run the gate. The framework's answer to that is CI

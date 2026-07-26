@@ -10,7 +10,7 @@ the phase's review notes; any FAIL blocks the phase.
 
 ## Structure
 
-- [ ] New files follow the Project Shape in `docs/stack-frontend/rules.md`
+- [ ] New files follow the Project Shape in `docs/stacks/<frontend>/rules.md`
       (`src/` layout; schemas in `src/schema/<domain>.ts`; tRPC client `api` from
       `@/trpc/react`).
 - [ ] Component files are kebab-case; exported components PascalCase; props
@@ -28,7 +28,7 @@ the phase's review notes; any FAIL blocks the phase.
       fetch helper(s) on `ctx` (one per backend service, e.g. `ctx.<service>Fetcher`);
       anything requiring a session uses `protectedProcedure`.
 
-## Forms (`docs/stack-frontend/forms.md`)
+## Forms (`docs/stacks/<frontend>/forms.md`)
 
 - [ ] Every data-entry form uses React Hook Form + `zodResolver` — no `useState`
       field state, no manual validation guards.
@@ -39,7 +39,7 @@ the phase's review notes; any FAIL blocks the phase.
 - [ ] Dual create/update via `data` prop where the entity supports both.
 - [ ] Forms live in `components/forms/`; schemas in `src/schema/<domain>.ts`.
 
-## Tables (`docs/stack-frontend/tables.md`)
+## Tables (`docs/stacks/<frontend>/tables.md`)
 
 - [ ] No hand-rolled `<table>` for data lists. Server-paged lists compose
       `QueryDataTable`; matrix grids may compose `BaseDataTable` directly.

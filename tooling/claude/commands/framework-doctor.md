@@ -20,8 +20,8 @@ Report each as PASS / FAIL / N/A with the evidence that decided it.
 ### 1a. Scope tier and team size recorded
 
 `CLAUDE.md` contains a `Scope tier:` line (`Small` / `Medium` / `Large`) and a
-`Developers:` line (`solo` / `team`). `process/project-rules.md`,
-`process/definition-of-done.md`, and `/phase-done` all read these to decide which
+`Developers:` line (`solo` / `team`). `process/core/project-rules.md`,
+`process/core/definition-of-done.md`, and `/phase-done` all read these to decide which
 spec artifacts a feature requires and whether human review means peer review or
 the developer's own acceptance review. Missing or unfilled is a FAIL: the rules
 then have no way to resolve, and every check falls back to the strictest reading.
@@ -104,14 +104,14 @@ supposed to have — so absence was always ambiguous and always reported N/A.
   upstream no longer ships is an upgrade that will fail at Step 3.
 
 Cross-check `scope_tier` and `developers` against the matching lines in
-`CLAUDE.md`. They drive `process/project-rules.md`, `definition-of-done.md` and
+`CLAUDE.md`. They drive `process/core/project-rules.md`, `definition-of-done.md` and
 `/phase-done`, and if the two records disagree, the rules being applied depend on
 which file gets read first.
 
 ### 8. Layer discipline
 
 Layer 3 content must not have leaked into layer 1/2. Scan `docs/process/` and
-`docs/stack-*/` for this project's product, domain, and system names (take them
+`docs/stacks/*/` for this project's product, domain, and system names (take them
 from `docs/project/domain-rules.md`). Any hit belongs in `docs/project/`.
 
 Report findings as advisory rather than FAIL — this check is heuristic, and a

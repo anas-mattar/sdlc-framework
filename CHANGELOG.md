@@ -51,7 +51,7 @@ file guard never saw, so a project could run reporting `GUARD: verified` with
 every real install path open. `guard-installs.sh` / `.ps1` closes it: 46 command
 forms, the same approval marker, the same exit codes.
 
-### Self-tests: 34 assertions -> 61
+### Self-tests: 34 assertions -> 61 (see below)
 
 The suite passed while examining almost nothing. Each of these is a check that
 now tests what the README already claimed it tested:
@@ -214,6 +214,56 @@ acceptance criterion this phase touches, name the test that would fail if it
 regressed.** A criterion with no such test is a FAIL. That is something a reviewer
 can spot-check in ten seconds.
 
+### Breaking — n stack slots, and a layer 1 that ships only what you earn
+
+**`docs/stack-backend/` and `docs/stack-frontend/` are replaced by
+`docs/stacks/<name>/`, one directory per stack, named after the stack.**
+
+The old layout offered exactly two slots and every cross-reference was written
+against those two names, so a project could install **at most two stacks and they
+had to map onto a backend/frontend dichotomy**. A Python CLI, a Rust service, a Go
+binary, an iOS app, a data pipeline or a library fitted neither slot, and every doc
+reference read wrong forever. Mobile + API + admin web was unrepresentable; so was
+a monorepo with two backend services. The package guard already covered 56
+ecosystems — the tooling was ready for a Go project and the document architecture
+was not.
+
+`stacks/TEMPLATE/` now states the file contract, because the two shipped stacks do
+not agree on it: one has `architecture-rules.md` with 36 numbered rules, the other
+`rules.md` with 8. A third-stack author was reverse-engineering the shape from two
+folders that contradict each other.
+
+`CLAUDE.md.template`'s task→doc map no longer ships pre-filled rows naming two
+specific stacks' filenames — one of them named after a particular RPC library,
+inside a template that claims to be stack-neutral. The stack rows are written at
+setup from the files a project's own `docs/stacks/<name>/` folders contain.
+
+Definition of Done item 5 is now conditional in both directions: **each stack this
+phase touches**, and only **where that stack ships a compliance checklist**. A
+checklist is optional in the stack contract, and demanding one from a stack that
+has none makes the item impossible to satisfy honestly — which is how items get
+ticked dishonestly.
+
+### The Small tier is actually small now
+
+`process/` is bucketed in the source tree — `core/`, `team/`, `optional/` — and
+SETUP copies only the buckets a project's answers earn. **The installed layout is
+unchanged and still flat at `docs/process/`**, so every `docs/process/<file>.md`
+cross-reference in every document keeps working; only this repository's own
+`process/<file>.md` references moved.
+
+| Bucket | Copied when | Words |
+|---|---|---|
+| `core/` | always | 4,524 |
+| `team/` | Q5 says 2+ developers | 1,525 |
+| `optional/` | per Q2, Q4, and whether you run agent workflows | 1,312 |
+
+A Small solo install drops from 7,361 to 4,524 words of layer 1, and stops shipping
+`team-workflow.md` (which Q5 told it to skip), `repository-strategy.md` (which Q2
+told it to skip), `orchestration.md`, and a self-declared placeholder. Text a tier
+disclaims but ships anyway is how a file titled MANDATORY ends up overriding its
+own tier.
+
 ### Corrected claims
 
 The README said the receipt is evidence an AI "cannot fabricate". The fingerprint
@@ -249,7 +299,10 @@ stop checking the others.
 | `tooling/claude/hooks/guard-packages.sh`, `.ps1` | **Copy** |
 | `tooling/claude/hooks/verify-guard.sh`, `.ps1` | **Copy** — then re-run it; a project that installed only the file guard fails here, which is the point. |
 | `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. |
-| `process/*`, `stacks/nextjs-trpc/compliance-checklist.md` | **Copy** |
+| `process/*` | **Breaking — re-copy per bucket.** Layer 1 moved to `process/core|team|optional/` upstream. Installed layout is unchanged (flat `docs/process/`), so re-copy `core/` plus whichever of `team/`, `optional/*` your answers earn, and **delete the installed files you no longer earn**. |
+| `docs/stack-backend/`, `docs/stack-frontend/` | **Breaking — rename.** `git mv docs/stack-backend docs/stacks/<name>` per stack, keeping the upstream folder name, then update `CLAUDE.md` and the manifest's `stacks` map. |
+| `stacks/TEMPLATE/` | **Install** — new; the file contract for writing a stack. |
+| `stacks/nextjs-trpc/compliance-checklist.md` | **Copy** |
 | `CLAUDE.md.template` | **Merge** — you filled its placeholders. The spec paths in the task→doc map and the source-of-truth list change to `specs/feature/NNN-<name>/`. |
 | `README.md`, `SETUP.md`, `SECURITY.md`, `CHANGELOG.md`, `VERSION`, `tests/*`, `.gitattributes` | **None** — upstream only. |
 

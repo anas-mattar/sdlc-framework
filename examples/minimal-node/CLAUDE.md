@@ -29,10 +29,10 @@ front:
 | Starting any feature | `docs/process/project-rules.md` |
 | Writing or updating a `spec.md` | `docs/process/source-artifacts.md` |
 | Finishing a feature | `docs/process/definition-of-done.md` |
-| Any data-entry form | `docs/stack-frontend/forms.md` |
-| Any data table/list | `docs/stack-frontend/tables.md` |
-| New API procedure / data fetching | `docs/stack-frontend/trpc.md` |
-| Auth, permissions, sensitive data | `docs/stack-frontend/security.md` |
+| Any data-entry form | `docs/stacks/<frontend>/forms.md` |
+| Any data table/list | `docs/stacks/<frontend>/tables.md` |
+| New API procedure / data fetching | `docs/stacks/<frontend>/trpc.md` |
+| Auth, permissions, sensitive data | `docs/stacks/<frontend>/security.md` |
 | Anything product-specific | `docs/project/` (domain rules + gotchas) |
 | Framework seems not to be enforcing | run `/framework-doctor` |
 | Moving to a newer framework version | run `/framework-upgrade <path-to-framework>` |
@@ -68,7 +68,7 @@ front:
 ## Source of Truth Priority
 
 1. `specs/feature/NNN-<name>/spec.md`
-2. `docs/stack-frontend/` (mandatory defaults)
+2. `docs/stacks/<frontend>/` (mandatory defaults)
 3. `docs/project/` (domain rules and gotchas)
 
 On any conflict between artifacts: **stop and report** — never silently choose.
@@ -98,7 +98,7 @@ Architecture summary: Next.js App Router with tRPC for all data access and
 NextAuth for sessions; server components by default, client components only where
 interaction requires them. UI is shadcn/ui over Tailwind. Every mutation goes
 through a tRPC procedure with server-side authorization — never a route handler
-that trusts the client. Rules: `docs/stack-frontend/`.
+that trusts the client. Rules: `docs/stacks/<frontend>/`.
 
 ## Project Knowledge (layer 3 — grows over time)
 

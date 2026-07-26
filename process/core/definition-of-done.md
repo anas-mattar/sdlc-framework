@@ -47,9 +47,17 @@ for it to be enforceable, and no other document is required to interpret it.
    (`docs/process/review-process.md`).
 5. **AI review complete** — the AI review checklist
    (`specs/_templates/ai-code-review-template.md`) was completed: spec/screenshot
-   match, backend/frontend rules, security, tests, migrations, unrelated changes,
-   rollback safety. When the phase touches frontend code, this includes passing
-   `docs/stack-frontend/compliance-checklist.md`.
+   match, stack rules, security, tests, migrations, unrelated changes, rollback
+   safety. Plus, for **each stack this phase touches**, that stack's compliance
+   checklist where it ships one (`docs/stacks/<name>/compliance-checklist.md`).
+
+   Both conditions are load-bearing. *Each stack this phase touches* rather than a
+   fixed backend/frontend pair, because a project may install any number of stacks
+   under `docs/stacks/` and a phase may touch one, several, or none of them.
+   *Where it ships one*, because a compliance checklist is optional in the stack
+   contract — demanding one from a stack that has none makes this item impossible
+   to satisfy honestly, and an item that cannot be satisfied honestly gets ticked
+   dishonestly. Small tier skips stack checklists entirely; say N/A and move on.
 6. **Human review approved** — a human verified business requirements,
    business/domain correctness, security implications, screenshot compliance, and
    architectural compliance, and approved the change **before merge**

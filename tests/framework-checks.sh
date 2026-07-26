@@ -136,7 +136,7 @@ fi
 #
 # Docs are written from the INSTALLED project's point of view, so a reference to
 # `docs/process/definition-of-done.md` has to be resolved back to its upstream
-# home at process/definition-of-done.md. That mapping is the whole check.
+# home at process/core/definition-of-done.md. That mapping is the whole check.
 echo "Cross-references"
 
 # Sets $CAND rather than echoing it. `for c in $(resolve_ref ...)` forks a subshell
@@ -150,8 +150,18 @@ echo "Cross-references"
 # harder to read than the file it points at, and it should be written as such.
 resolve_ref() {  # resolve_ref <referenced path>, sets CAND
     case "$1" in
-        docs/process/*)        CAND="process/${1#docs/process/}" ;;
-        docs/stack-*/*)        CAND="${1##*/}" ;;
+        # docs/process/ is FLAT in an installed project, but the source tree splits
+        # the same files across process/core|team|optional/ so SETUP can copy only
+        # the buckets a project's answers earn (a Small solo install has no business
+        # carrying team-workflow.md). Resolve by basename rather than by path, or
+        # every layer-1 reference reports as dangling.
+        docs/process/*)        CAND="${1##*/}" ;;
+        # Bare process/<file>.md names this repository's own layout. Released
+        # CHANGELOG entries name the path a file had at the time, and rewriting a
+        # released entry to match a later layout is falsification -- so resolve
+        # these by basename too, which still catches a file that is genuinely gone.
+        process/*)             CAND="${1##*/}" ;;
+        docs/stacks/*/*)        CAND="${1##*/}" ;;
         docs/stacks/*/*)       CAND="${1##*/}" ;;
         docs/project/*)        CAND="tooling/project-docs/${1##*/}" ;;
         docs/contracts/*)      CAND="modules/contracts/${1##*/}" ;;
@@ -288,12 +298,29 @@ rm -f "$reffile"
 # 7a-iii below rather than by banning the fence.
 echo "Layer discipline"
 
-stack_refs=$(grep -rnE '`[^`]*stacks/' process/ 2>/dev/null | wc -l | tr -d ' ')
-if [ "$stack_refs" -eq 0 ]; then
-    ok "no layer-1 document references a stacks/ path"
+# The assertion is that layer 1 names no SPECIFIC stack -- not that it never says
+# the word "stacks". Layer 1 must be able to refer to the slot: the Definition of
+# Done has to say "that stack's compliance checklist", and the review templates
+# have to point at "the rules for the stack this phase touches". What it may not do
+# is name `nextjs-trpc` or `dotnet-api`, because then layer 1 knows which stacks
+# exist and stops being stack-neutral.
+#
+# The names come from the tree rather than a hardcoded list, so this keeps working
+# when someone adds a stack -- which a fixed list would not. TEMPLATE is excluded:
+# it is the contract for writing a stack, not a stack.
+stack_names=$(find stacks -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+    | sed 's|.*/||' | grep -v '^TEMPLATE$')
+if [ -z "$stack_names" ]; then
+    meh "layer-1 stack-neutrality (no stacks/ folders to check against)"
 else
-    bad "layer 1 references stack-specific paths ($stack_refs)"
-    grep -rnE '`[^`]*stacks/' process/ 2>/dev/null | sed 's/^/          /'
+    stack_pat=$(printf '%s' "$stack_names" | tr '\n' '|' | sed 's/|$//')
+    stack_refs=$(grep -rnE "$stack_pat" process/ 2>/dev/null | wc -l | tr -d ' ')
+    if [ "$stack_refs" -eq 0 ]; then
+        ok "no layer-1 document names a specific stack ($(echo "$stack_names" | wc -l | tr -d ' ') checked)"
+    else
+        bad "layer 1 names specific stacks ($stack_refs) -- it must refer to the slot, not the stack"
+        grep -rnE "$stack_pat" process/ 2>/dev/null | sed 's/^/          /'
+    fi
 fi
 
 lang_fences=$(grep -rnE '^```[a-zA-Z]' process/ 2>/dev/null \
@@ -312,13 +339,13 @@ fi
 # gate-command.md is exempt -- the gate script is its subject.
 tc_pat='yarn|npm|pnpm|bun|dotnet|cargo|poetry|mvn|gradle|composer|nuget'
 toolchain=$(grep -rnwE "$tc_pat" process/ 2>/dev/null \
-    | grep -v '^process/gate-command.md:' | wc -l | tr -d ' ')
+    | grep -v '^process/core/gate-command.md:' | wc -l | tr -d ' ')
 if [ "$toolchain" -eq 0 ]; then
     ok "no layer-1 document names a stack toolchain"
 else
     bad "layer 1 names stack toolchains ($toolchain)"
     grep -rnwE "$tc_pat" process/ 2>/dev/null \
-        | grep -v '^process/gate-command.md:' | sed 's/^/          /'
+        | grep -v '^process/core/gate-command.md:' | sed 's/^/          /'
 fi
 
 # --- 7b. Named third-party products in layer 1 (ratchet) --------------------
@@ -370,13 +397,13 @@ fi
 echo "Gate evidence"
 exitcode_pat='exit code (0|zero)|confirmed exit code'
 ec_count=$(grep -rniE "$exitcode_pat" process/ stacks/ modules/ tooling/claude/ 2>/dev/null \
-    | grep -v '^process/gate-command.md:' | wc -l | tr -d ' ')
+    | grep -v '^process/core/gate-command.md:' | wc -l | tr -d ' ')
 if [ "$ec_count" -eq 0 ]; then
     ok "no document offers an exit code as gate evidence"
 else
     bad "an exit code is offered as gate evidence in $ec_count place(s) -- the receipt is the evidence"
     grep -rniE "$exitcode_pat" process/ stacks/ modules/ tooling/claude/ 2>/dev/null \
-        | grep -v '^process/gate-command.md:' | sed 's/^/          /'
+        | grep -v '^process/core/gate-command.md:' | sed 's/^/          /'
 fi
 
 # --- 7e. One spec-folder layout, not two ------------------------------------

@@ -3,11 +3,11 @@
     "Copy to <project>/.claude/framework-manifest.json at install and fill it in. SETUP.md step 7 walks this.",
     "",
     "WHY THIS FILE EXISTS. The install RENAMES most of what it copies: stacks/<name>/ becomes",
-    "docs/stack-backend/, modules/contracts/ becomes docs/contracts/, tooling/gate/gate-<stack>.sh becomes",
+    "docs/stacks/<backend>/, modules/contracts/ becomes docs/contracts/, tooling/gate/gate-<stack>.sh becomes",
     "gate.sh at each repo root, tooling/ci/gate.yml becomes .github/workflows/gate.yml. Nothing recorded those",
     "renames, so /framework-upgrade could only resolve docs/process/ -- the one directory whose mapping is 1:1.",
     "For everything else it had no way to know which upstream file an installed file came from, and the stack",
-    "identity was destroyed outright: once stacks/dotnet-api/ is called docs/stack-backend/, nothing on disk",
+    "identity was destroyed outright: once stacks/dotnet-api/ is called docs/stacks/<backend>/, nothing on disk",
     "says it was dotnet-api. The upgrade silently skipped layer 2, the review templates, the gate scripts and",
     "CI -- which is where all the editable content lives.",
     "",
@@ -27,7 +27,17 @@
   "scope_tier": "{{SCOPE_TIER}}",
   "developers": "{{TEAM_SIZE}}",
 
-  "$comment_stacks": "The upstream stacks/<name>/ folder behind each installed docs/stack-*/ directory. Without this the upgrade cannot tell which stack a project installed, because the install renamed the folder. Delete the slot a project does not use rather than leaving it blank.",
+  "$comment_stacks": [
+    "Every stack this project installed, keyed by the ROLE it plays here. The installed directory is",
+    "docs/stacks/<the value>, so the folder is self-describing and the identity survives the install.",
+    "",
+    "There is no fixed set of roles and no limit of two. The old layout offered exactly two slots -- ",
+    "docs/stack-backend/ and docs/stack-frontend/ -- and every cross-reference was written against those",
+    "names, so a project could install at most two stacks and they had to map onto a backend/frontend",
+    "dichotomy. A Python CLI, a Rust service, a Go binary, an iOS app, a data pipeline or a library fitted",
+    "neither slot; mobile + API + admin web was unrepresentable, and so was a monorepo with two backend",
+    "services. Add as many entries as the project has stacks, and name the roles after what they are."
+  ],
   "stacks": {
     "backend": "{{BACKEND_STACK}}",
     "frontend": "{{FRONTEND_STACK}}"
@@ -49,10 +59,12 @@
   ],
 
   "files": [
-    { "upstream": "process/", "installed": "docs/process/", "class": "copy" },
+    { "upstream": "process/core/", "installed": "docs/process/", "class": "copy" },
+    { "upstream": "process/team/", "installed": "docs/process/", "class": "copy" },
+    { "upstream": "process/optional/", "installed": "docs/process/", "class": "copy" },
     { "upstream": "process/templates/", "installed": "specs/_templates/", "class": "copy" },
-    { "upstream": "stacks/{{BACKEND_STACK}}/", "installed": "docs/stack-backend/", "class": "copy" },
-    { "upstream": "stacks/{{FRONTEND_STACK}}/", "installed": "docs/stack-frontend/", "class": "copy" },
+    { "upstream": "stacks/{{BACKEND_STACK}}/", "installed": "docs/stacks/{{BACKEND_STACK}}/", "class": "copy" },
+    { "upstream": "stacks/{{FRONTEND_STACK}}/", "installed": "docs/stacks/{{FRONTEND_STACK}}/", "class": "copy" },
     { "upstream": "modules/contracts/", "installed": "docs/contracts/", "class": "copy" },
     { "upstream": "tooling/claude/commands/", "installed": ".claude/commands/", "class": "copy" },
     { "upstream": "tooling/claude/hooks/", "installed": ".claude/hooks/", "class": "copy" },

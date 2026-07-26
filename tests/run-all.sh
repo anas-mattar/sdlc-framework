@@ -5,7 +5,7 @@
 #
 # CI runs this exact script (.github/workflows/selftest.yml), so there is no
 # separate CI command chain to drift out of sync -- the same rule the framework
-# imposes on consuming projects in process/team-workflow.md section 3.
+# imposes on consuming projects in process/team/team-workflow.md section 3.
 #
 # Prints EXIT: <code> and exits with it, matching the gate script convention.
 

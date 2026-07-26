@@ -67,8 +67,10 @@ Notes:
 
 ## 5. Architectural Compliance
 
-- [ ] Backend follows the layered rules (`docs/stack-backend/`); frontend follows
-      the mandatory defaults (`docs/stack-frontend/`).
+- [ ] Each stack this phase touches follows its own rules in
+      `docs/stacks/<name>/rules.md`. A project has one directory per stack, however
+      many it has — check every one the diff touches, not a fixed backend/frontend
+      pair.
 - [ ] No unapproved packages or architecture changes (must be in `plan.md`).
 - [ ] Cross-repo ordering respected: backend contract defined/merged before
       dependent frontend work (multi-repo projects;

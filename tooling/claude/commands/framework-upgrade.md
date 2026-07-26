@@ -26,7 +26,7 @@ each file came from. Read it first: every later step depends on it.
 
 - **Missing manifest** — the install predates v2.3.0. Say so and offer to
   reconstruct one from `tooling/claude/framework-manifest.template.json` by
-  inspecting the project (which `docs/stack-*/` exist, which repos have a
+  inspecting the project (which `docs/stacks/*/` exist, which repos have a
   `gate.sh`, which optional modules are present). Get the user to confirm the
   reconstruction *before* using it, and write it out as its own commit. Do not
   proceed on a guessed manifest — a wrong `upstream` path silently upgrades a file

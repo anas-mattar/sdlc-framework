@@ -51,12 +51,21 @@ front:
 | Writing or updating a `spec.md` | `docs/business/` (behavior source of truth), `docs/process/source-artifacts.md` |
 | Building or changing UI | `specs/feature/NNN-<name>/screenshots/`, `docs/prototypes/` (layout source of truth) |
 | Finishing any phase | `docs/process/definition-of-done.md` |
-| A migration or new entity | `docs/stack-backend/database-rules.md` |
-| Backend controllers/services/repos | `docs/stack-backend/architecture-rules.md` |
-| Any data-entry form | `docs/stack-frontend/forms.md` |
-| Any data table/list | `docs/stack-frontend/tables.md` |
-| New API procedure / data fetching | `docs/stack-frontend/trpc.md` |
-| Auth, permissions, sensitive data | `docs/stack-frontend/security.md` |
+<!-- STACK ROWS — write these at setup from the files your own docs/stacks/<name>/
+     folders actually contain, one row per document. Do not keep rows for a stack
+     this project did not install: a row pointing at a file that is not there is an
+     instruction to read nothing, and it is indistinguishable from a rule that has
+     been quietly dropped.
+
+     These rows used to ship pre-filled with two specific stacks' filenames --
+     including one named after a particular RPC library -- inside a template that
+     claims to be stack-neutral. Examples of the shape, not rows to keep:
+
+       | A migration or new entity          | `docs/stacks/<name>/database-rules.md` |
+       | Controllers / services / repos     | `docs/stacks/<name>/rules.md`          |
+       | Any data-entry form                | `docs/stacks/<name>/forms.md`          |
+       | Auth, permissions, sensitive data  | `docs/stacks/<name>/security.md`       |
+-->
 | A new external call or webhook | `docs/contracts/` (contract doc first, code second) |
 | Anything product-specific | `docs/project/` (domain rules + gotchas) |
 | Claiming/starting a feature on a team | `docs/process/team-workflow.md` |

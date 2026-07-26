@@ -81,18 +81,42 @@ Worktrees for parallel feature checkouts are optional (team-workflow §7). `.cla
   rollback docs per feature.
 
 Record the answer in `CLAUDE.md` (`Scope tier:`), along with solo/team from Q5
-(`Developers:`). These two lines are not decoration: `process/project-rules.md`,
-`process/definition-of-done.md`, and the `/phase-done` command all read them to
+(`Developers:`). These two lines are not decoration: `process/core/project-rules.md`,
+`process/core/definition-of-done.md`, and the `/phase-done` command all read them to
 decide which artifacts a feature needs and what "human review" means here. An
 unfilled tier line means every rule falls back to the strictest reading.
 
 ## Install Steps
 
-1. **Copy layer 1 (always):**
-   - `process/` → `<project>/docs/process/`
+1. **Copy layer 1 (per your answers):**
+   The installed layout is **flat** — everything lands in `docs/process/`, and every
+   cross-reference in the docs is written against that. The source tree is bucketed
+   so a project receives only the rules it earns:
+
+   | Copy | When | Contents |
+   |---|---|---|
+   | `process/core/*` | **always** | project rules, gate contract, Definition of Done, branch strategy, rollback, source artifacts, review process |
+   | `process/team/*` | Q5 ≥ 2 developers | `team-workflow.md` — ownership, claim commits, reviewer ≠ owner |
+   | `process/optional/repository-strategy.md` | Q2 = multi-repo | the wrapper pattern |
+   | `process/optional/orchestration.md` | you use multi-agent AI workflows | agent boundaries |
+   | `process/optional/deployment-standards.md` | you want a place to record deploy/secrets conventions | ships as a **placeholder** — fill it or skip it |
+
+   All of them → `<project>/docs/process/` (flat, no subdirectories).
+
+   **Do not copy `process/` wholesale.** A Small solo project that does receives
+   `team-workflow.md` (which Q5 told it to skip), `repository-strategy.md` (which
+   Q2 told it to skip), and a self-declared placeholder — roughly 2,800 words
+   describing behaviour the project does not have. Text a tier disclaims but ships
+   anyway is how a mandatory checklist ends up overriding its own tier.
 2. **Copy layer 2 (per Q1):**
-   - `stacks/<backend>/` → `docs/stack-backend/`
-   - `stacks/<frontend>/` → `docs/stack-frontend/`
+   - `stacks/<name>/` → `docs/stacks/<name>/`, once per stack, **keeping the folder
+     name**. The directory is self-describing, and there is no limit of two: a
+     project can install `docs/stacks/go-api/`, `docs/stacks/nextjs-trpc/` and
+     `docs/stacks/swift-ios/` side by side. Record each in the manifest's `stacks`
+     map under the role it plays.
+   - If your stack has no folder yet, copy `stacks/TEMPLATE/` and fill it in — it
+     states the file contract so you are not reverse-engineering the shape from the
+     two shipped stacks, which do not agree with each other.
 3. **Copy modules (per Q4):**
    - `modules/contracts/` → `docs/contracts/`
 4. **Create layer 3 (empty):**
@@ -173,7 +197,7 @@ unfilled tier line means every rule falls back to the strictest reading.
      stack it does not have, an optional module it skipped, the `.ps1` gates on a
      POSIX-only team.
    - This is the one record of where each installed file came from. The install
-     *renames* most of what it copies (`stacks/nextjs-trpc/` → `docs/stack-frontend/`,
+     *renames* most of what it copies (`stacks/nextjs-trpc/` → `docs/stacks/<frontend>/`,
      `tooling/gate/gate-node.sh` → `gate.sh`), and without this file
      `/framework-upgrade` cannot resolve those paths back upstream — it silently
      skips layer 2, the review templates, the gate scripts and CI, which is where
@@ -197,4 +221,4 @@ unfilled tier line means every rule falls back to the strictest reading.
 1. **Upstream-first:** any improvement to a layer-1/2 file gets ported back to the
    framework repo and `VERSION` bumped. Project copies never diverge silently.
 2. **Layer discipline:** if you are about to write a product name into a
-   `docs/process/` or `docs/stack-*/` file — stop; it belongs in `docs/project/`.
+   `docs/process/` or `docs/stacks/*/` file — stop; it belongs in `docs/project/`.
