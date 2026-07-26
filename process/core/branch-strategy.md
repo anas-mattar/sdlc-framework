@@ -21,13 +21,21 @@ branch name.
 | `chore/NNN-<name>` | Tooling, config, maintenance (no behavior change) | `chore/003-upgrade-framework` |
 | `docs/NNN-<name>` | Documentation / governance only | `docs/004-baseline-and-project-setup` |
 
-`NNN` is a zero-padded sequential number shared across all prefixes (the next
-number is `max(existing branch and spec numbers) + 1`). `<name>` is lowercase,
-kebab-case, descriptive, and stable for the life of the branch.
+`NNN` is a zero-padded sequential number shared across all prefixes. `<name>` is
+lowercase, kebab-case, descriptive, and stable for the life of the branch.
+
+**How the next number is chosen depends on how many people are working.** Solo,
+compute it: `max(existing branch and spec numbers) + 1`. On a team, **do not
+compute it** — two developers scanning the same folders at the same time both see
+`003` and both take `004`. Numbers are *allocated* (claim commit or tracker issue
+ID), per `docs/process/team-workflow.md` §2a, which is authoritative on this.
 
 ## Rules
 
-- `main` is **protected**. No direct commits to `main`.
+- `main` is **protected**. No direct commits to `main` — with one exception, the
+  claim commit that allocates a feature number on a team (`team-workflow.md` §2a).
+  That commit touches nothing but the claim, and it exists precisely because the
+  alternative is the numbering collision above.
 - **One branch per feature.** Do not bundle unrelated work onto a single branch.
 - Merge to `main` only **after the gate passes (a valid receipt locally, plus the
   green CI gate on the PR) and human review is approved** (see

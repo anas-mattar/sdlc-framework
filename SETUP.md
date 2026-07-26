@@ -95,7 +95,7 @@ unfilled tier line means every rule falls back to the strictest reading.
 
    | Copy | When | Contents |
    |---|---|---|
-   | `process/core/*` | **always** | project rules, gate contract, Definition of Done, branch strategy, rollback, source artifacts, review process |
+   | `process/core/*` | **always** | project rules (incl. what a phase is), gate contract, Definition of Done, branch strategy, rollback, source artifacts, review process, exceptions |
    | `process/team/*` | Q5 ≥ 2 developers | `team-workflow.md` — ownership, claim commits, reviewer ≠ owner |
    | `process/optional/repository-strategy.md` | Q2 = multi-repo | the wrapper pattern |
    | `process/optional/orchestration.md` | you use multi-agent AI workflows | agent boundaries |

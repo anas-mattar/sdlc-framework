@@ -84,6 +84,30 @@ run; a committed receipt is a receipt someone can forge in a pull request.
 > The receipt records *that a verification happened and on what*. Trusting the
 > user to run the gate is deliberate; trusting a transcribed number is not.
 
+### What the fingerprint does not cover
+
+The fingerprint is a `git write-tree` over a throwaway index, so it covers exactly
+what git would: tracked files, plus untracked files that are **not ignored**. Three
+gaps follow from that, and the docs used to claim untracked coverage without
+qualifying it:
+
+- **Gitignored files are outside it.** A `.env` repointing the app at production
+  changes no tree hash. The receipt says the tree is unchanged, and it is right —
+  the behaviour changed anyway.
+- **Submodule contents are outside it.** The tree records the submodule's commit,
+  so a *pointer* change is caught; edits inside a submodule working tree are not.
+- **The exclusion rules are themselves unfingerprintable.** `.gitignore` is a
+  tracked file and is covered, but `.git/info/exclude` is not in the worktree at
+  all. One line there hides a file from the fingerprint permanently, and the change
+  that hid it leaves no trace in any receipt.
+
+None of these is a bug to fix in the fingerprint — they are the boundary of what
+content-hashing a git tree can mean. They are written down because a control whose
+limits are undocumented gets trusted past them. Treat `.git/info/exclude` and
+`.gitignore` as security-relevant files: review changes to them, and prefer
+`.gitignore` (which is tracked, diffable, and covered) over `.git/info/exclude`
+(which is none of those).
+
 ## CI Runs the Same Gate — Solo Included
 
 CI runs `./gate.sh` (or `gate.ps1`) on every PR — the exact script the developer

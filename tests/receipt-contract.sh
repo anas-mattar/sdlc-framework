@@ -50,9 +50,9 @@ git commit -qm "baseline"
 # substituted away before it could be observed, and the suite reported 18/18 PASS.
 # Replacing only the command words leaves the operators in place, so the shape of
 # the real gate line is under test.
-sed -e 's/^yarn build$/eval "${GATE_BUILD:-true}"/' \
-    -e 's/yarn check/eval "${GATE_CHECK:-true}"/' \
-    -e 's/yarn test/eval "${GATE_TEST:-true}"/' \
+sed -e 's/^{{BUILD_COMMAND}}$/eval "${GATE_BUILD:-true}"/' \
+    -e 's/{{LINT_COMMAND}}/eval "${GATE_CHECK:-true}"/' \
+    -e 's/{{TEST_COMMAND}}/eval "${GATE_TEST:-true}"/' \
     "$ROOT/tooling/gate/gate-node.sh" > gate.sh
 chmod +x gate.sh
 for v in GATE_BUILD GATE_CHECK GATE_TEST; do

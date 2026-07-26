@@ -147,7 +147,7 @@ assert "a min-mode receipt is rejected"         "$rc" "1"
 # Write both gates BEFORE either runs. gate.sh is an untracked file and therefore
 # part of the fingerprint, so creating it between the two runs would change the
 # tree and make this compare two different trees rather than two interpreters.
-sed -e 's/^yarn build$/true/' -e 's/yarn check/true/' -e 's/yarn test/true/' \
+sed -e 's/^{{BUILD_COMMAND}}$/true/' -e 's/{{LINT_COMMAND}}/true/' -e 's/{{TEST_COMMAND}}/true/' \
     "$ROOT/tooling/gate/gate-node.sh" > gate.sh
 run
 ps_tree=$(sed -n 's/.*"tree"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' .gate-result.json)

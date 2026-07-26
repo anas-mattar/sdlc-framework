@@ -3,6 +3,23 @@
 > Copy this template to `specs/feature/NNN-<name>/ai-code-review.md` and complete one
 > section per phase. This is Definition of Done item 5. AI review alone never
 > authorizes a merge — human review (item 6) follows it.
+>
+> **Keep this list short on purpose.** Human attention is the scarcest resource in
+> this process, and the steps that get rubber-stamped first are the expensive,
+> low-visibility ones — running the app against the screenshots, verifying a
+> permission denial with a second account, reading the full diff rather than
+> `--stat`. Those are the only end-to-end checks the framework has. Anything a
+> script can decide belongs in the gate or in CI, where it is free and never
+> skipped; if you find yourself adding a box here that a grep could answer, add
+> the grep instead.
+>
+> **Reviewed tree, not reviewed commit.** This review runs *before* the phase
+> commit, so there is no sha to name: the honest answers were "none yet", "pending",
+> or `HEAD` — which points at the *previous* phase's commit and is actively
+> misleading. The gate receipt's `tree` hash is available pre-commit, identifies
+> exactly what was reviewed, survives the commit that follows, and is already
+> printed by `--verify`. Quoting it makes this artifact independently checkable for
+> the first time: anyone can re-run `--verify` and compare.
 
 | Field | Value |
 |-------|-------|
@@ -10,7 +27,7 @@
 | Phase | [N] — [phase title from tasks.md] |
 | Repos / stacks touched | [repo → `docs/stacks/<name>/`, one per stack this phase touches] |
 | Branch(es) | [feature/... per repo] |
-| Reviewed commit(s) | [sha(s)] |
+| Reviewed tree | [`tree` from `./gate.sh --verify`] |
 | Review date | [YYYY-MM-DD] |
 | Verdict | PASS / FAIL — [one line why] |
 
@@ -18,7 +35,14 @@
 
 - [ ] Implemented behavior matches `spec.md` for this phase — no more, no less.
 - [ ] Only the current approved phase from `tasks.md` was implemented.
-- [ ] Any spec/plan/screenshot conflict was **stopped and reported**, not resolved silently.
+- [ ] Conflicts between artifacts: **state them, or state that there were none.**
+      Every conflict encountered is a row in `specs/feature/NNN-<name>/decisions.md`
+      with who resolved it and how. Write "none encountered" here if there were
+      none — silence is not the same claim, and only an explicit answer can be
+      wrong. A conflict resolved silently is the one failure this checklist cannot
+      detect after the fact.
+
+      Conflicts this phase: [none encountered / see decisions.md rows N–M]
 
 Notes: [deviations found, or "none"]
 
@@ -102,10 +126,16 @@ Notes:
 
 ## 7. Unrelated Changes
 
-- [ ] `git diff --stat` shows only files this phase intended to change.
-- [ ] No refactors of unrelated files, no unrelated features, no unapproved packages.
+- [ ] `git diff --stat` shows only files this phase intended to change — no
+      refactors of unrelated files, no unrelated features.
 
 Notes: [list any reverted stragglers]
+
+*Unapproved packages are not on this list.* The package and install guards block
+manifest edits and install commands at the moment they are attempted, and CI fails
+if the approval marker was committed. Re-checking by eye what a hook already
+enforces spends the scarcest thing in this process — human attention — on the item
+least likely to be wrong.
 
 ## 8. Rollback Safety
 

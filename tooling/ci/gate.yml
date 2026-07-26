@@ -127,6 +127,30 @@ jobs:
           chmod +x ./check-stubs.sh
           ./check-stubs.sh
 
+      # An exception path with no cost is just the process, and gets used for
+      # convenience within a month. This charges the debt to whoever tries to move
+      # NEXT rather than to whoever incurred it, which is the only pressure that
+      # reliably beats the pressure that created the exception in the first place.
+      # Struck-through rows are closed and ignored. No exceptions file is fine.
+      - name: No overdue exceptions
+        run: |
+          f=docs/exceptions.md
+          [ -f "$f" ] || exit 0
+          today=$(date -u +%Y-%m-%d)
+          overdue=$(grep -E '^\|' "$f" \
+            | grep -v '~~' \
+            | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}[[:space:]]*\|[[:space:]]*$' \
+            | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' \
+            | while read -r d; do [ "$d" \< "$today" ] && echo "$d"; done)
+          if [ -n "$overdue" ]; then
+            echo "OVERDUE: an open exception is past its remediation date."
+            echo "  Remediate it or move the date with a named authoriser — see"
+            echo "  docs/process/exceptions.md. This blocks every PR until it is closed,"
+            echo "  which is the point: the cost lands on whoever moves next."
+            grep -E '^\|' "$f" | grep -v '~~' | sed 's/^/    /'
+            exit 1
+          fi
+
       - name: Run the gate
         run: |
           chmod +x ./gate.sh

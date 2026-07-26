@@ -81,6 +81,11 @@ loophole v2.0.0 was written to close. A fact stated in seven places changes in s
 | Which artifacts each scope tier requires | `process/core/definition-of-done.md` + `SETUP.md` Q6 |
 | Which files an install receives | `tooling/claude/framework-manifest.template.json` |
 | The file contract for a stack | `stacks/TEMPLATE/rules.md` |
+| What a phase is, and what it is not | `process/core/project-rules.md` |
+| What "stop and report" must leave behind | `process/core/project-rules.md` |
+| The full source-of-truth ranking | `process/core/source-artifacts.md` |
+| When the process may be excepted, and what it costs | `process/core/exceptions.md` |
+| What the fingerprint does not cover | `process/core/gate-command.md` |
 | The threat model, and what the receipt does not defend against | `SECURITY.md` |
 
 Two rules for using it:

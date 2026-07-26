@@ -23,6 +23,34 @@ recorded in `CLAUDE.md`:
 In every tier: screenshots are placed in `specs/[feature-name]/screenshots/` when
 UI is involved, and implementation never starts from an unapproved spec.
 
+## What a Phase Is
+
+Every rule in this framework is scoped to "a phase", and the word was never
+defined — which leaves both gerrymanders open. **One mega-phase** satisfies every
+scope rule trivially, because nothing is unrelated when the phase is everything.
+**Twelve micro-phases** farm green gates and train the reviewer that these reviews
+are formalities, which holds right up until the phase with the authorization bug.
+
+A phase is:
+
+- **One reviewable increment of behaviour.** It changes what the system does, in a
+  way a reviewer can state in a sentence without using "and also".
+- **Independently gateable.** It builds and its tests pass on its own. A phase that
+  only compiles once the *next* phase lands is not a phase.
+- **Roughly a day's work, and no more than three.** This is a smell test, not a
+  rule with a checker: a phase that has run for a week was either mis-scoped or has
+  quietly become three phases, and a phase measured in minutes is probably a step
+  within one.
+
+A phase is **not** a layer. "All the repositories, then all the services, then all
+the controllers" is three phases none of which can be reviewed for behaviour and
+none of which can be gated meaningfully — it is one phase cut the wrong way.
+
+Phases are defined in `tasks.md` **before implementation begins**, and `tasks.md`
+is fingerprinted by the gate receipt precisely so that they cannot be redrawn
+afterwards to match what was built. Wanting to re-cut the phases mid-flight is a
+stop-and-report event, not a paperwork update.
+
 ## One Phase Only
 
 *(Medium and Large tiers. Small-tier features are implemented and gated as a
@@ -35,6 +63,30 @@ Do not move to another phase until:
 2. User checks `git diff --stat`.
 3. Current phase issues are fixed.
 4. User approves the next phase.
+
+## Stop and Report Leaves an Artifact
+
+"Stop and report" is the framework's answer to every conflict between artifacts,
+and on its own it is **undetectable**. A silent resolution and no conflict at all
+look exactly the same afterwards: both produce working code and no record. The one
+checkbox aimed at it is ticked by the same agent that would have done the silent
+resolving — a self-report on a self-report.
+
+So it produces a row. Append to `specs/feature/NNN-<name>/decisions.md`:
+
+```markdown
+| # | Artifacts in conflict | What each said | Resolved by | Decision |
+|---|---|---|---|---|
+| 1 | `spec.md` §3 vs screenshot 04 | spec: single-step form; screenshot: two steps | A. Nkemi, 2026-03-04 | Follow the screenshot; spec corrected in the same commit. |
+```
+
+And the review requires an **explicit negative assertion**: the AI review states
+either the conflicts encountered or *"none encountered"*. "Nothing written" is not
+the same claim as "nothing happened", and only one of them is falsifiable.
+
+The gate receipt fingerprints `decisions.md`, exactly as it does `spec.md` and
+`tasks.md` — `docs/process/gate-command.md` explains where that boundary falls and
+why. A conflict resolved after the gate moved what the phase was measured against.
 
 ## Branch Rule
 

@@ -4,7 +4,7 @@
      Small tier, solo, single repo, no design source, no external integrations.
      Sections excluded by those answers have been deleted, not commented out. -->
 
-Framework: sdlc-framework v2.0.0
+Framework: sdlc-framework v2.3.0
 Scope tier: Small
 Developers: solo
 

@@ -62,7 +62,13 @@ $guarded = @(
     'settings.gradle.kts', 'libs.versions.toml', 'build.sbt', 'composer.json', 'composer.lock',
     'Gemfile', 'Gemfile.lock', '*.gemspec', 'Package.swift', 'Package.resolved', 'Podfile',
     'Podfile.lock', 'Cartfile', 'Cartfile.resolved', 'pubspec.yaml', 'pubspec.lock', 'mix.exs',
-    'mix.lock'
+    'mix.lock',
+    '.npmrc', '.yarnrc', '.yarnrc.yml', '.pnpmfile.cjs', 'bunfig.toml', 'nuget.config', 'NuGet.Config',
+    'packages.lock.json', 'global.json', '.netconfig', 'go.work', 'go.work.sum', 'requirements.in',
+    'constraints.txt', 'pip.conf', '.piprc', 'poetry.toml', '.cargo/config.toml', 'Cargo.lock.orig',
+    '.bundle/config', '.gemrc', 'gradle.properties', 'gradle-wrapper.properties',
+    'maven-settings.xml', '.npmignore', 'Dockerfile', 'Dockerfile.*', 'docker-compose.yml',
+    'docker-compose.yaml', 'devcontainer.json'
 # GUARDED-MANIFESTS-END
 )
 

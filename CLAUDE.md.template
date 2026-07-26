@@ -101,15 +101,25 @@ front:
 
 ## Source of Truth Priority
 
-1. `specs/feature/NNN-<name>/screenshots/`  <!-- per feature; absent when the feature has no design -->
-2. `specs/feature/NNN-<name>/spec.md`
-3. `specs/feature/NNN-<name>/plan.md`
-4. `specs/feature/NNN-<name>/contracts/`
-5. `specs/feature/NNN-<name>/data-model.md`
-6. `specs/feature/NNN-<name>/tasks.md`
+**Canonical: `docs/process/source-artifacts.md` → *The Full Ranking*.** It covers
+spec artifacts and rule documents in one order; delete the rows below that this
+project does not have, and do not re-rank them here.
 
-On any conflict between artifacts: **stop and report** — never silently choose.
-Never invent a UI layout when screenshots exist.
+1. `docs/business/`  <!-- behaviour; delete if the project has no source guides -->
+2. `docs/roadmap/` definitions  <!-- scope/sequencing; delete at Small tier -->
+3. `specs/feature/NNN-<name>/screenshots/`  <!-- layout only; absent when the feature has no design -->
+4. `specs/feature/NNN-<name>/spec.md`
+5. `specs/feature/NNN-<name>/decisions.md`  <!-- conflicts already resolved -->
+6. `specs/feature/NNN-<name>/plan.md`
+7. `specs/feature/NNN-<name>/contracts/`
+8. `specs/feature/NNN-<name>/data-model.md`
+9. `specs/feature/NNN-<name>/tasks.md`
+10. `docs/project/`  <!-- domain rules and gotchas — outranks stack rules -->
+11. `docs/stacks/<name>/`  <!-- one row per installed stack -->
+
+On any conflict between artifacts: **stop and report** — never silently choose, and
+record the resolution in `specs/feature/NNN-<name>/decisions.md`. Never invent a UI
+layout when screenshots exist.
 
 Phase progress goes in `specs/feature/NNN-<name>/status.md` and feature status in
 `docs/roadmap/status.md` — never as edits to `tasks.md` or the roadmap

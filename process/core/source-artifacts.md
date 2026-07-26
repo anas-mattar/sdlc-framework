@@ -21,6 +21,44 @@ compete with each other:
   prototype showing a control the roadmap schedules for a later phase is
   sequencing, not contradiction. Check the table before reporting.
 
+## The Full Ranking
+
+**This is the canonical source-of-truth order.** Two partial rankings used to ship
+— one over spec artifacts, one over rule documents — with no overlap in their
+middle entries, so at least six artifact pairs had *no defined ordering at all*.
+Screenshots versus the stack compliance checklist was one of them, and both are
+mandatory and both are reachable from the same phase.
+
+On conflict, the higher entry wins. Where a rank is contested, that is a
+stop-and-report event, not a judgement call:
+
+| # | Artifact | Owns |
+|---|---|---|
+| 1 | `docs/business/` | **Behaviour.** What the system must do. Specs derive from it, never the reverse. |
+| 2 | `docs/roadmap/` (definitions, not `status.md`) | **Scope and sequencing.** Whether this work is in, and when. |
+| 3 | `specs/feature/NNN-<name>/screenshots/` | **Layout only** — component placement and flow, where a design exists. Never business rules. |
+| 4 | `specs/feature/NNN-<name>/spec.md` | The feature's required behaviour, derived from 1. |
+| 5 | `specs/feature/NNN-<name>/decisions.md` | Conflicts already resolved, and how. Binding on later phases. |
+| 6 | `specs/feature/NNN-<name>/plan.md` | Technical approach. |
+| 7 | `specs/feature/NNN-<name>/contracts/` | Interface shape where one is defined. |
+| 8 | `specs/feature/NNN-<name>/data-model.md` | Entity shape. |
+| 9 | `specs/feature/NNN-<name>/tasks.md` | Phase breakdown. |
+| 10 | `docs/project/` | **Domain rules and gotchas.** Beats stack rules: a misspelled directory that must stay misspelled outranks any convention. |
+| 11 | `docs/stacks/<name>/` | **How to build it** on this stack, including its compliance checklist. |
+| 12 | `docs/contracts/` | External integration patterns. |
+
+Two orderings people get wrong:
+
+- **Screenshots outrank the spec for layout, and nothing else.** A screenshot never
+  overrides a business rule; a spec never licenses inventing a layout when a
+  screenshot exists.
+- **`docs/project/` outranks `docs/stacks/`.** Layer 3 is more specific than layer
+  2 by construction. A stack rule that says "name it correctly" loses to a recorded
+  gotcha that says "this directory is misspelled on purpose".
+
+`CLAUDE.md` restates only the entries a given project actually has — it does not
+re-rank them.
+
 ## The Derivation Rule
 
 **Specs are derived; sources are upstream.**

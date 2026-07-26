@@ -88,10 +88,22 @@ if [ "$1" = "--verify" ]; then
     exit 0
 fi
 
-yarn build
+# Replace the {{...}} placeholders with this project's actual scripts.
+#
+# They are placeholders rather than working defaults on purpose. The dotnet gate
+# has always used them, so /framework-doctor check 2 (`grep -rn "{{"`) catches an
+# uncustomised .NET install; the node gate shipped real commands with only a
+# comment asking you to change them, so an uncustomised Node gate passed the
+# doctor cleanly while running whatever the framework author's project happened to
+# use. A gate nobody customised is a gate that verifies someone else's project.
+#
+# `yarn check` in particular was a Yarn 1 command that does not exist in the Yarn
+# version this file's own corepack note implies -- so the shipped default was not
+# merely generic, it was broken.
+{{BUILD_COMMAND}}
 code=$?
 if [ "$1" != "--min" ] && [ $code -eq 0 ]; then
-    yarn check && yarn test   # replace with the project's scripts
+    {{LINT_COMMAND}} && {{TEST_COMMAND}}
     code=$?
 fi
 

@@ -186,18 +186,29 @@ resolve_ref() {  # resolve_ref <referenced path>, sets CAND
 # If a reference is neither, it must resolve. `rollback.md` sat in category 3 --
 # "named by a mandatory checklist and shipped nowhere" -- until the reference was
 # made explicit, which is exactly the class of defect this check exists to find.
+GUARD_NAMES=" $(sed -n '/GUARDED-MANIFESTS-BEGIN/,/GUARDED-MANIFESTS-END/p' \
+    tooling/claude/hooks/guard-packages.sh 2>/dev/null \
+    | sed '1d;$d' | tr -d '"' | sed 's/^GUARDED=//' | tr ' \t\n' '   ') "
+
 is_expected_unresolvable() {
     case "$1" in
         # 1. per-feature and per-install artifacts
         specs/*|docs/roadmap/*|docs/prototypes/*|docs/architecture.md|\
         .gate-result.json|.claude/allow-package-changes|CLAUDE.md|\
         spec.md|plan.md|tasks.md|status.md|research.md|notes.md|rollback.md|\
-        ai-code-review.md|human-pr-review.md) return 0 ;;
+        ai-code-review.md|human-pr-review.md|decisions.md|docs/exceptions.md) return 0 ;;
         # 2. other tools' files, named as examples. Listed case-sensitively:
         # `Package.json` appears in prose about the case-insensitive guard bug,
         # and spelling it out is clearer than folding case for every lookup.
         package.json|Package.json|package-lock.json|appsettings.json|\
         settings.local.json|AGENTS.md|docs/notes-package.json) return 0 ;;
+    esac
+    # Every manifest the package guard knows about is, by definition, another
+    # tool's file that this repository does not contain. Derive them from the
+    # guard's own list rather than maintaining a second copy here -- the docs
+    # name these constantly when explaining what is guarded and why.
+    case "$GUARD_NAMES" in
+        *" $1 "*) return 0 ;;
     esac
     return 1
 }
@@ -324,13 +335,13 @@ else
 fi
 
 lang_fences=$(grep -rnE '^```[a-zA-Z]' process/ 2>/dev/null \
-    | grep -vE '^[^:]*:[0-9]+:```(text|json|yaml|yml|diff|bash|sh|shell|console)$' | wc -l | tr -d ' ')
+    | grep -vE '^[^:]*:[0-9]+:```(text|json|yaml|yml|diff|bash|sh|shell|console|markdown|md)$' | wc -l | tr -d ' ')
 if [ "$lang_fences" -eq 0 ]; then
     ok "no layer-1 code fence names a language"
 else
     bad "layer 1 contains language-tagged code fences ($lang_fences)"
     grep -rnE '^```[a-zA-Z]' process/ 2>/dev/null \
-        | grep -vE '^[^:]*:[0-9]+:```(text|json|yaml|yml|diff|bash|sh|shell|console)$' | sed 's/^/          /'
+        | grep -vE '^[^:]*:[0-9]+:```(text|json|yaml|yml|diff|bash|sh|shell|console|markdown|md)$' | sed 's/^/          /'
 fi
 
 # 7a-iii. No layer-1 document names a stack toolchain. This is what makes the
@@ -529,6 +540,37 @@ fact_check "human review: peer vs solo" 12 'peer review|reviewer .{0,12}(other t
 fact_check "CI applies to solo too"     4 'CI .{0,30}(solo|not run by the party)|solo.{0,40}\bCI\b'
 fact_check "receipt: status vs reqs"    2 'status.{0,60}requirement|requirement.{0,60}status'
 fact_check "scope-tier artifacts"       8 'Small.{0,60}spec\.md|spec\.md.{0,40}Small'
+
+# --- 7h. Every cited rule ID is defined --------------------------------------
+# The rule-ID scheme exists so a review can cite `B1` instead of paraphrasing it.
+# That only works if the ID resolves. The README's own example was `F12`, which
+# appeared exactly once in the whole repository: in the sentence claiming it
+# exists. A citation that resolves to nothing is worse than a paraphrase, because
+# it looks authoritative.
+#
+# Definitions are headings (`### Rule B1: ...`); citations are inline (`(Rule F8d)`).
+# IDs are append-only, so gaps in a series are expected and not checked -- what is
+# checked is that nothing points at an ID nobody wrote.
+echo "Rule IDs"
+id_defined=$(grep -rhoE '^#+[[:space:]]+Rule[[:space:]]+[A-Z]{1,3}[0-9]+[a-z]?(-[0-9]+)?' stacks/ 2>/dev/null \
+    | sed -E 's/.*Rule[[:space:]]+//; s/-[0-9]+$//' | sort -u)
+id_cited=$(grep -rhoE 'Rule[[:space:]]+[A-Z]{1,3}[0-9]+[a-z]?' \
+    stacks/ process/ tooling/ examples/ README.md CLAUDE.md.template 2>/dev/null \
+    | sed -E 's/.*Rule[[:space:]]+//' | sort -u)
+if [ -z "$id_defined" ]; then
+    meh "rule IDs (none defined in stacks/)"
+else
+    printf '%s\n' "$id_defined" > "${TMPDIR:-/tmp}/.ids-def.$$"
+    printf '%s\n' "$id_cited"   > "${TMPDIR:-/tmp}/.ids-cit.$$"
+    id_bad=$(comm -13 "${TMPDIR:-/tmp}/.ids-def.$$" "${TMPDIR:-/tmp}/.ids-cit.$$")
+    rm -f "${TMPDIR:-/tmp}/.ids-def.$$" "${TMPDIR:-/tmp}/.ids-cit.$$"
+    if [ -z "$id_bad" ]; then
+        ok "every cited rule ID resolves ($(echo "$id_defined" | wc -l | tr -d ' ') defined)"
+    else
+        bad "rule IDs cited but never defined:"
+        printf '%s\n' "$id_bad" | sed 's/^/          /'
+    fi
+fi
 
 # --- 8. No dependency on an unshipped constitution (ratchet) ----------------
 # Layers 1 and 2 used to cite constitution principles (I, X, XVI, XVII) as the

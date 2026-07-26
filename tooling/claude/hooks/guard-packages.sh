@@ -13,6 +13,14 @@
 # every dependency change silently -- an enforcement gap that looks like
 # enforcement. Guarding a manifest costs nothing on a project that has none.
 #
+# It covers RESOLUTION as well as declaration: .npmrc, .yarnrc.yml, nuget.config,
+# pip.conf, .bundle/config and friends decide WHERE packages come from. A registry
+# redirect is worse than a manifest edit -- it repoints every dependency in the
+# project at once while the manifest and the lockfile still look pristine, so the
+# diff a reviewer reads says nothing changed. go.work, global.json and
+# packages.lock.json pin resolution the same way. Dockerfiles install packages
+# outside every package manager the rest of this list knows about.
+#
 # The identical list lives in guard-packages.ps1; tests/framework-checks.sh fails
 # the build if the two drift apart.
 
@@ -66,7 +74,13 @@ Cargo.toml Cargo.lock pom.xml build.gradle build.gradle.kts settings.gradle
 settings.gradle.kts libs.versions.toml build.sbt composer.json composer.lock
 Gemfile Gemfile.lock *.gemspec Package.swift Package.resolved Podfile
 Podfile.lock Cartfile Cartfile.resolved pubspec.yaml pubspec.lock mix.exs
-mix.lock"
+mix.lock
+.npmrc .yarnrc .yarnrc.yml .pnpmfile.cjs bunfig.toml nuget.config NuGet.Config
+packages.lock.json global.json .netconfig go.work go.work.sum requirements.in
+constraints.txt pip.conf .piprc poetry.toml .cargo/config.toml Cargo.lock.orig
+.bundle/config .gemrc gradle.properties gradle-wrapper.properties
+maven-settings.xml .npmignore Dockerfile Dockerfile.* docker-compose.yml
+docker-compose.yaml devcontainer.json"
 # GUARDED-MANIFESTS-END
 
 # Match case-insensitively, by folding both sides once. `case` is case-sensitive

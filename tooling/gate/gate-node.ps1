@@ -18,10 +18,22 @@
 # dies with "string is missing the terminator". Use `--`, never an em dash.
 param([switch]$Min, [switch]$Verify)
 
+# Replace the {{...}} placeholders with this project's actual scripts.
+#
+# They are placeholders rather than working defaults on purpose. The dotnet gate
+# has always used them, so /framework-doctor check 2 (grep for "{{") catches an
+# uncustomised .NET install; the node gate shipped real commands with only a
+# comment asking you to change them, so an uncustomised Node gate passed the
+# doctor cleanly while running whatever the framework author's project happened to
+# use. A gate nobody customised is a gate that verifies someone else's project.
+#
+# `yarn check` in particular was a Yarn 1 command that does not exist in the Yarn
+# version this file's own corepack note implies -- so the shipped default was not
+# merely generic, it was broken.
 $Steps = @(
-    @("yarn", "build"),
-    @("yarn", "check"),   # lint + typecheck -- replace with the project's scripts
-    @("yarn", "test")
+    @("{{BUILD_EXE}}", "{{BUILD_ARG}}"),
+    @("{{LINT_EXE}}", "{{LINT_ARG}}"),
+    @("{{TEST_EXE}}", "{{TEST_ARG}}")
 )
 
 # --- receipt machinery (identical in every gate script -- do not let it diverge) ---

@@ -51,7 +51,7 @@ file guard never saw, so a project could run reporting `GUARD: verified` with
 every real install path open. `guard-installs.sh` / `.ps1` closes it: 46 command
 forms, the same approval marker, the same exit codes.
 
-### Self-tests: 34 assertions -> 65
+### Self-tests: 34 assertions -> 66
 
 The suite passed while examining almost nothing. Each of these is a check that
 now tests what the README already claimed it tested:
@@ -300,6 +300,104 @@ one that pretended to would be wrong often enough to be trained away — which i
 failure mode this framework names better than anyone. Spread is the proxy, the
 table is the judgement, review is where they meet.
 
+### Definitions the framework relied on but never wrote down
+
+- **What a phase is.** Every rule is scoped to "a phase" and the word was never
+  defined, leaving both gerrymanders open: one mega-phase satisfies every scope
+  rule trivially (nothing is unrelated when the phase is everything), and twelve
+  micro-phases farm green gates and train the reviewer that these are formalities
+  — which holds right up to the phase with the authorization bug. Now defined in
+  `project-rules.md`: one reviewable increment of behaviour, independently
+  gateable, roughly a day. Explicitly **not** a layer — "all the repositories,
+  then all the services" is one phase cut the wrong way.
+- **"Stop and report" now leaves an artifact.** It appeared 13 times across 7
+  documents and produced nothing checkable: a silent resolution and no conflict at
+  all look identical afterwards. Conflicts become rows in
+  `specs/feature/NNN-<name>/decisions.md`, and the AI review requires an explicit
+  negative assertion — *"none encountered"* is a claim that can be wrong; silence
+  is not. `decisions.md` is fingerprinted, so a conflict resolved after the gate
+  invalidates the receipt.
+- **One source-of-truth ranking.** Two partial rankings shipped — one over spec
+  artifacts, one over rule documents — with no overlap in their middle entries, so
+  at least six artifact pairs had no defined order at all, including screenshots
+  versus the stack compliance checklist where both are mandatory and both
+  reachable. `source-artifacts.md` now carries all 12 entries in one order. Two
+  people get wrong: screenshots outrank the spec **for layout and nothing else**,
+  and `docs/project/` outranks `docs/stacks/` because a recorded gotcha beats a
+  stack convention.
+- **What the fingerprint does not cover.** Gitignored files, submodule contents,
+  and — sharpest — `.git/info/exclude`, which is not in the worktree, so *the
+  change that hides a file is itself unfingerprintable*. These are the boundary of
+  what hashing a git tree can mean, not bugs; they are written down because a
+  control whose limits are undocumented gets trusted past them.
+
+### An exception path, with a cost
+
+Greps for *waiver, exception, emergency, hotfix, deadline, override, bypass* across
+every process document returned **zero hits**. A process with no escape hatch is
+not followed more carefully under pressure — it is abandoned under pressure,
+silently, and abandonment leaves no artifact.
+
+`process/core/exceptions.md` bounds it: a recorded row naming which Definition of
+Done items are unmet, the external forcing function, a **named human** authoriser,
+and a remediation date. Every column is required.
+
+The mechanism that makes it work is in `tooling/ci/gate.yml`: **CI fails every
+subsequent pull request while an open exception is past its remediation date** —
+not the PR that opened it, the next one. An exception path with no cost is just the
+process and will be used for convenience within a month; one that blocks the *next*
+piece of work gets paid down, because the debt lands on whoever tries to move
+rather than on whoever incurred it.
+
+Never available for: committing the package-guard override, weakening `gate.sh` or
+CI or `CODEOWNERS` to make a check pass, or skipping human review on money,
+permissions or migrations.
+
+### Dependency resolution is guarded, not just declaration
+
+Guard patterns **56 → 86**. The additions cover where packages come *from* rather
+than which ones are declared: `.npmrc`, `.yarnrc.yml`, `nuget.config`, `pip.conf`,
+`.bundle/config`, `go.work`, `global.json`, `packages.lock.json`, Dockerfiles and
+compose files. **A registry redirect is worse than a manifest edit** — it repoints
+every dependency in the project at once while the manifest and the lockfile still
+look pristine, so the diff a reviewer reads says nothing changed.
+
+### Smaller corrections
+
+- **The Node gate now ships `{{PLACEHOLDER}}`s** like the .NET gate, so
+  `/framework-doctor` check 2 catches an uncustomised install. It previously
+  shipped real commands with only a comment asking you to change them — and
+  `yarn check` is a Yarn 1 command that does not exist in the Yarn version the
+  file's own corepack note implies, so the default was broken as well as generic.
+- **Every cited rule ID must now resolve.** The README's own example was `F12`,
+  which appeared exactly once in the repository: in the sentence claiming it
+  exists. The claim now cites real IDs and says coverage is partial *on purpose* —
+  an ID earns its place when a reviewer could plausibly disagree, and numbering the
+  rest dilutes the ones that matter.
+- **The AI review names a tree, not a sha.** It runs pre-commit, so the honest
+  answers were "none yet" or `HEAD` — the *previous* phase's commit, actively
+  misleading. The receipt's `tree` hash is available pre-commit, identifies exactly
+  what was reviewed, and is already printed by `--verify`, which makes the review
+  artifact independently checkable for the first time.
+- **Feature numbering is no longer stated absolutely.** `max(existing)+1` is
+  correct solo and races on a team; `branch-strategy.md` now says so and points at
+  `team-workflow.md` §2a, and the "no direct commits to main" rule names the
+  claim-commit exemption that exists to prevent exactly that collision.
+- **Layer-3 material out of layer 1.** `rollback-process.md` spent 19 of 35 lines
+  on posted ledger entries and per-legal-entity scoping — meaningless for a
+  compiler, a CLI or a data pipeline, and a mandatory checklist half of which is
+  inapplicable trains readers to skim the half that isn't. It is now about
+  *irreversible records* generally, with the project's own list pushed to
+  `docs/project/domain-rules.md` and a safe default until it exists.
+  `deployment-standards.md` is optional, and its "record your identity provider and
+  committed-secret locations" section now sits in a `LOCAL` preserved region rather
+  than in a file the next upgrade overwrites.
+- **Review checkboxes 72 → 68**, and the unapproved-packages box is gone with the
+  reason stated: two guards block it at write time and CI fails if the marker was
+  committed. Re-checking by eye what a hook already enforces spends the scarcest
+  resource in the process on the item least likely to be wrong.
+- The example install is stamped v2.3.0 rather than v2.0.0.
+
 ### Corrected claims
 
 The README said the receipt is evidence an AI "cannot fabricate". The fingerprint
@@ -332,6 +430,8 @@ stop checking the others.
 | `tooling/gate/check-stubs.sh`, `.ps1` | **Install** — new. Copy to each repo root, run `sh check-stubs.sh --baseline`, commit `.gate-stubs-baseline`. |
 | `tooling/claude/framework-manifest.template.json` | **Install** — new. Fill it in and commit as `.claude/framework-manifest.json`; `/framework-upgrade` offers to reconstruct one for older installs. Without it the next upgrade still skips layer 2, the templates, the gates and CI. |
 | `tooling/ci/CODEOWNERS` | **Install** — new. |
+| `process/core/exceptions.md` | **Install** — new, part of `core/`. Create `docs/exceptions.md` only when you first need one. |
+| `tooling/gate/gate-node.sh`, `.ps1` | **Merge** — now ships `{{PLACEHOLDER}}`s. Keep your commands; take the other hunks. |
 | `tooling/claude/hooks/guard-packages.sh`, `.ps1` | **Copy** |
 | `tooling/claude/hooks/verify-guard.sh`, `.ps1` | **Copy** — then re-run it; a project that installed only the file guard fails here, which is the point. |
 | `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. |

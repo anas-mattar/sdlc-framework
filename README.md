@@ -27,7 +27,13 @@ Supported by four ideas most teams never formalize:
    conflict, stop and report instead of silently choosing.
 2. **Prototype screenshots as UI authority** — when a prototype exists, the AI never
    invents a layout.
-3. **Numbered rules** — every rule has an ID (B1, DB4, F12…) so reviews can cite them.
+3. **Numbered rules** — the rules most worth arguing about carry an ID (`B1`,
+   `DB4`, `F8a`…) so a review can cite one instead of paraphrasing it. Coverage is
+   partial and deliberately so: an ID earns its place when a reviewer could
+   plausibly disagree about whether the code follows the rule, and numbering the
+   rest dilutes the ones that matter. IDs are append-only — never renumbered,
+   because review artifacts in old specs cite them. `stacks/TEMPLATE/rules.md` has
+   the convention.
 4. **Gate receipts** — the gate writes a fingerprint of the exact tree it verified,
    so "it passed" is checkable evidence about *which* tree passed, rather than a
    number someone transcribed (`process/core/gate-command.md`). It defends against
