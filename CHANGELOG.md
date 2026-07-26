@@ -51,7 +51,7 @@ file guard never saw, so a project could run reporting `GUARD: verified` with
 every real install path open. `guard-installs.sh` / `.ps1` closes it: 46 command
 forms, the same approval marker, the same exit codes.
 
-### Self-tests: 34 assertions → 56
+### Self-tests: 34 assertions → 57
 
 The suite passed while examining almost nothing. Each of these is a check that
 now tests what the README already claimed it tested:
@@ -72,13 +72,36 @@ now tests what the README already claimed it tested:
   command *words* are stubbed, and four assertions cover `&&` semantics in both
   directions.
 - **The two `.ps1` gates had zero behavioural tests** — which is how the
-  `EXIT: 0` bug shipped. New `tests/gate-powershell.sh`: 11 assertions, including
-  the missing-toolchain and unfingerprintable-tree arms.
+  `EXIT: 0` bug shipped. New `tests/gate-powershell.sh`: 13 assertions, including
+  the missing-toolchain, unfingerprintable-tree and one-step-gate arms.
 - **No tags now FAILs in CI** rather than skipping. A skipped check in CI is a
   check that is not running.
 - New ratchet: no document outside `gate-command.md` may offer an exit code as
   gate evidence. This is what let a MANDATORY stack checklist keep saying
   "confirmed exit code 0" for two releases after v2.0.0 removed it.
+
+### `verify-guard` was blind to the wiring
+
+It read the *first* `"command"` string in `settings.json` and nothing else, so two
+misconfigurations verified clean:
+
+- **A missing second hook.** Any project upgrading to this release installs
+  `guard-installs`; without the check, one that forgets it still prints
+  `GUARD: verified` while every install path stands open.
+- **The matcher.** Rewiring the hook to `"matcher": "Read"` — a tool that edits
+  nothing — left the command intact and still verified. `/framework-doctor` trusts
+  this script, so it reported a completely inert guard as healthy.
+
+Both verifiers now pair each matcher with its command, assert that a matcher
+covering `Edit` also covers `Write`, and exercise both guards. Verified against
+seven misconfigurations: correct install, `matcher: Read`, install guard removed,
+Edit-without-Write, no hooks at all, wrong-platform hook command, and correct
+again.
+
+Use `verify-guard.ps1` on Windows. The `.sh` verifier spawns a shell per case and
+MSYS fork-and-pipe is slow enough that a long run intermittently stalls — a
+verifier that hangs teaches you to stop running it. The two guards' own process
+counts are down by a third for the same reason.
 
 ### Corrected claims
 
@@ -110,6 +133,7 @@ stop checking the others.
 | `tooling/gate/gate-node.sh`, `gate-dotnet.sh`, `gate-node.ps1`, `gate-dotnet.ps1` | **Merge** — you edited the step commands. Take the receipt-machinery and step-runner hunks; keep your steps. `gate-dotnet.ps1` now uses a `$Steps` array like the Node gate. |
 | `tooling/claude/hooks/guard-installs.sh`, `.ps1` | **Install** — new files. |
 | `tooling/claude/hooks/guard-packages.sh`, `.ps1` | **Copy** |
+| `tooling/claude/hooks/verify-guard.sh`, `.ps1` | **Copy** — then re-run it; a project that installed only the file guard fails here, which is the point. |
 | `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. |
 | `process/*`, `stacks/nextjs-trpc/compliance-checklist.md` | **Copy** |
 | `README.md`, `SETUP.md`, `SECURITY.md`, `CHANGELOG.md`, `VERSION`, `tests/*`, `.gitattributes` | **None** — upstream only. |

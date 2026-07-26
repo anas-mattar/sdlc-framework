@@ -42,7 +42,12 @@ name=${name##*\\}
 # as `\\`, so folding them one-for-one yields `C://proj//.claude//settings.json`.
 # Squeeze the repeats or none of the patterns below match on Windows -- the
 # platform this guard is shipped configured for.
-norm=$(printf '%s' "$file_path" | tr '\\' '/' | tr -s '/')
+#
+# Fold and squeeze in ONE sed rather than two `tr` calls. This hook runs on every
+# Edit and Write, so each avoided process is paid back thousands of times -- and on
+# Windows/MSYS, where fork is expensive, a chain of small helpers is what makes a
+# long verify-guard run stall partway through.
+norm=$(printf '%s' "$file_path" | sed 's|\\|/|g; s|//*|/|g')
 case "$norm" in
     *.claude/allow-package-changes|*.claude/settings*.json|*.claude/hooks/*)
         echo "BLOCKED: '$file_path' is part of the package guard itself (its approval marker, its configuration, or its hook script). Only a human creates or edits these. If package changes are genuinely approved in the feature's plan.md (or spec.md at Small tier), ask the user to create the marker -- do not create it yourself." >&2
@@ -71,8 +76,16 @@ mix.lock"
 # the real manifest straight past the guard. The parity self-test compares the
 # pattern STRINGS, so it passed throughout. Fold once, not once per pattern: this
 # hook runs on every Edit and Write.
-lname=$(printf '%s' "$name" | tr 'A-Z' 'a-z')
-lguarded=$(printf '%s' "$GUARDED" | tr 'A-Z' 'a-z')
+# One `tr` for both, split back apart with parameter expansion -- see the note
+# above about process count. The blank separator line cannot appear inside either
+# value, so the split is unambiguous.
+folded=$(printf '%s\n\n%s' "$name" "$GUARDED" | tr 'A-Z' 'a-z')
+lname=${folded%%"
+
+"*}
+lguarded=${folded#*"
+
+"}
 
 # `set -f` is required: without it the `for` list undergoes pathname expansion,
 # so `*.csproj` silently becomes whatever .csproj files happen to be in the

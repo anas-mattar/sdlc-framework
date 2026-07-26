@@ -52,7 +52,7 @@ git check-ignore -q .gate-result.json && echo ignored || echo NOT-ignored
 
 A committed receipt is one that can be forged in a pull request.
 
-### 5. Package guard actually blocks
+### 5. Both package guards actually block
 
 Run the self-test from the project root:
 
@@ -61,10 +61,20 @@ powershell -NoProfile -File .claude/hooks/verify-guard.ps1
 ```
 (or `sh .claude/hooks/verify-guard.sh` on macOS/Linux)
 
-Only `GUARD: verified` is a PASS. `INCONCLUSIVE` means
-`.claude/allow-package-changes` is present — report it as a FAIL-to-verify and
-note that leaving that marker in place after a phase commits disables the guard
-permanently.
+Only `GUARD: verified` is a PASS, and it now covers **two** hooks: the file guard
+on `Edit|MultiEdit|Write|NotebookEdit`, and the install guard on `Bash`. A project
+upgraded from before v2.3.0 will most often fail here with *no PreToolUse hook
+matches Bash* — the file guard alone never sees `npm i`, `dotnet add package`,
+`pip install` or `go get`, so every real way of adding a dependency is open. The
+fix is a second `PreToolUse` entry running `guard-installs`.
+
+The verifier also checks the **matcher**, not just the command. A hook pointed at
+a tool that edits nothing (`"matcher": "Read"`) used to verify clean; it now
+reports `GUARD: BROKEN`.
+
+`INCONCLUSIVE` means `.claude/allow-package-changes` is present — report it as a
+FAIL-to-verify and note that leaving that marker in place after a phase commits
+disables the guard permanently.
 
 ### 6. CI gate present
 
