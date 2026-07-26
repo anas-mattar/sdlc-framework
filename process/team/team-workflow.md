@@ -102,28 +102,16 @@ Solo developers are unaffected: with one writer, computed numbering is safe.
 
 ## 3. CI Runs the Same Gate Scripts
 
-CI runs `./gate.sh` (or `gate.ps1`) on every PR — the exact script the developer
-ran locally. There is no separate CI command chain to drift out of sync. Start
-from `tooling/ci/gate.yml` and require the check on `main`.
-
-- Locally, the gate stays user-run (per `docs/process/gate-command.md`).
-- CI is the backstop: **no phase merges without a green gate**, even if a
-  developer skipped running it.
-- **CI does not read receipts.** `.gate-result.json` is local evidence of a local
-  run; CI re-runs the gate itself on a clean checkout. The receipt closes the
-  "did the gate actually run against *this* code" gap for the AI mid-phase; CI
-  closes the "did it run at all" gap at merge. Neither replaces the other.
-
-This section is **not** team-only. A solo project has no peer review either, so CI
-is its sole mechanical enforcement — see `SETUP.md` Q5.
+**Canonical: `docs/process/gate-command.md` → *CI Runs the Same Gate — Solo
+Included*.** Nothing about that rule is team-specific, so it lives in the
+always-installed core rather than here. This section number is kept so existing
+references to §3 still resolve.
 
 ## 4. Human Review Is Peer Review
 
-On a team, the human review required by
-`docs/process/definition-of-done.md` item 6 is a PR reviewed by a developer
-**other than the feature's owner** (reviewer ≠ owner). Use
-`specs/_templates/human-pr-review-template.md`. Self-review does not satisfy
-item 6 when more than one developer is available.
+**Canonical: `docs/process/definition-of-done.md` item 6**, which states the team
+and solo cases together and defines what counts as evidence of approval. The team
+case is *reviewer ≠ owner*; this section exists to name it, not to restate it.
 
 ## 5. Contract-First for Shared Surfaces
 

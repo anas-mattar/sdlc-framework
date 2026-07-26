@@ -79,11 +79,32 @@ gate scripts stop agreeing on the list.
 > does not promise the status boards are unchanged.
 
 Add `.gate-result.json` to `.gitignore`. The receipt is local evidence of a local
-run; a committed receipt is a receipt someone can forge in a pull request. CI does
-not read receipts — it runs the gate itself (`docs/process/team-workflow.md` §3).
+run; a committed receipt is a receipt someone can forge in a pull request.
 
 > The receipt records *that a verification happened and on what*. Trusting the
 > user to run the gate is deliberate; trusting a transcribed number is not.
+
+## CI Runs the Same Gate — Solo Included
+
+CI runs `./gate.sh` (or `gate.ps1`) on every PR — the exact script the developer
+ran locally. There is no separate CI command chain to drift out of sync. Start from
+`tooling/ci/gate.yml` and require the check on `main`.
+
+- Locally, the gate stays user-run.
+- CI is the backstop: **no phase merges without a green gate**, even if a developer
+  skipped running it.
+- **CI does not read receipts.** `.gate-result.json` is local evidence of a local
+  run; CI re-runs the gate itself on a clean checkout. The receipt closes the "did
+  the gate actually run against *this* code" gap for the AI mid-phase; CI closes
+  the "did it run at all" gap at merge. Neither replaces the other.
+- CI also runs the gate script **pinned by hash** (`.gate-sha256`), because CI runs
+  a script the party being checked can edit. See `tooling/ci/gate.yml`.
+
+**This is not a team rule, and it is least optional when you are alone.** A solo
+project has no peer review, so CI is its only mechanical enforcement — the local
+gate and its receipt are both produced by the party being checked. This rule lives
+here, in the always-installed core, precisely so a solo install cannot fail to
+receive it.
 
 ## Minimum Gate
 

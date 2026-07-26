@@ -58,6 +58,6 @@ git commit -m "feat([feature-name]): complete phase [phase-number]"
 
 ## Review Rule
 
-AI review is not enough. A **human** approves before merge, in every tier — a peer
-other than the owner on a team, the developer's own acceptance review when solo.
-Never the AI. See `docs/process/definition-of-done.md` item 6.
+AI review is not enough: a **human** approves before merge, in every tier, and
+never the AI. Who that human may be — and what counts as evidence that they
+approved — is defined once, in `docs/process/definition-of-done.md` item 6.

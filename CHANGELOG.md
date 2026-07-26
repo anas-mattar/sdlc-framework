@@ -51,7 +51,7 @@ file guard never saw, so a project could run reporting `GUARD: verified` with
 every real install path open. `guard-installs.sh` / `.ps1` closes it: 46 command
 forms, the same approval marker, the same exit codes.
 
-### Self-tests: 34 assertions -> 61 (see below)
+### Self-tests: 34 assertions -> 65
 
 The suite passed while examining almost nothing. Each of these is a check that
 now tests what the README already claimed it tested:
@@ -264,6 +264,42 @@ told it to skip), `orchestration.md`, and a self-declared placeholder. Text a ti
 disclaims but ships anyway is how a file titled MANDATORY ends up overriding its
 own tier.
 
+### One source of truth per fact — and a solo project that stops losing CI
+
+Design Principle #2 says *never duplicate a rule in two files, link it*, and this
+repository violated it more than any rule it states. That is not untidiness: when
+the gate contract changed in v2.0.0 one copy was missed, and a MANDATORY stack
+checklist went on saying *"Gate run by the user with confirmed exit code 0"* for
+two more releases — telling an AI in writing that a pasted number satisfies the
+gate, which is the exact loophole v2.0.0 was written to close. **A fact stated in
+seven places changes in six.**
+
+Enforcing this immediately found a live bug introduced by the layer-1 split above.
+`team-workflow.md` §3 read *"This section is **not** team-only. A solo project has
+no peer review either, so CI is its sole mechanical enforcement"* — and `team/` is
+only copied for 2+ developers, so **a solo install would no longer have received
+the CI rule at all**. The projects for which CI is the only mechanical enforcement
+were the ones about to stop being told to set it up. The rule now lives in
+`process/core/gate-command.md` → *CI Runs the Same Gate — Solo Included*, which is
+always installed; `team-workflow.md` §3 keeps its number so existing references
+resolve, and is now a pointer.
+
+Three restatements of the peer-vs-solo review rule became pointers
+(`project-rules.md`, `review-process.md`, `team-workflow.md` §4). Each had restated
+the rule *and then* linked to `definition-of-done.md` item 6.
+
+`CONTRIBUTING.md` gains a **Canonical locations** table: eleven rows, one canonical
+file per repeated fact, and the rule that makes pointers real — *a pointer is a
+sentence, not a paragraph; restating the rule and then linking to it is still a
+second copy, it just looks tidier while it drifts.*
+
+`framework-checks.sh` ratchets the spread of the four worst offenders, with
+baselines measured rather than aspirational. The check counts **files mentioning a
+fact**, not restatements, and says so: no grep can tell a pointer from a copy, and
+one that pretended to would be wrong often enough to be trained away — which is the
+failure mode this framework names better than anyone. Spread is the proxy, the
+table is the judgement, review is where they meet.
+
 ### Corrected claims
 
 The README said the receipt is evidence an AI "cannot fabricate". The fingerprint
@@ -299,6 +335,7 @@ stop checking the others.
 | `tooling/claude/hooks/guard-packages.sh`, `.ps1` | **Copy** |
 | `tooling/claude/hooks/verify-guard.sh`, `.ps1` | **Copy** — then re-run it; a project that installed only the file guard fails here, which is the point. |
 | `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. |
+| `CONTRIBUTING.md` | **None** — upstream only; adds the canonical-locations table. |
 | `process/*` | **Breaking — re-copy per bucket.** Layer 1 moved to `process/core|team|optional/` upstream. Installed layout is unchanged (flat `docs/process/`), so re-copy `core/` plus whichever of `team/`, `optional/*` your answers earn, and **delete the installed files you no longer earn**. |
 | `docs/stack-backend/`, `docs/stack-frontend/` | **Breaking — rename.** `git mv docs/stack-backend docs/stacks/<name>` per stack, keeping the upstream folder name, then update `CLAUDE.md` and the manifest's `stacks` map. |
 | `stacks/TEMPLATE/` | **Install** — new; the file contract for writing a stack. |

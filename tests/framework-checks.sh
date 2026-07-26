@@ -495,6 +495,41 @@ else
     meh "install manifest checks (no working python found)"
 fi
 
+# --- 7g. Duplicated facts (ratchet) -----------------------------------------
+# Design Principle #2 is "one source of truth per fact -- never duplicate a rule in
+# two files, link it", and the repo violated it more than any other rule it states.
+# The cost is not untidiness. When the gate contract changed in v2.0.0 one copy was
+# missed, and a MANDATORY stack checklist went on saying "confirmed exit code 0"
+# for two more releases -- telling an AI in writing that a pasted number satisfies
+# the gate, the exact loophole v2.0.0 was written to close. A fact stated in seven
+# places changes in six.
+#
+# This counts FILES MENTIONING a fact, not restatements: no grep can tell a pointer
+# from a copy, and one that pretended to would be wrong often enough to be ignored.
+# Spread is the proxy, the canonical-locations table in CONTRIBUTING.md is the
+# judgement, and review is where the two meet. Lower a baseline when you
+# consolidate; never raise one to make a red check green.
+echo "Duplicated facts"
+fact_scan() {  # fact_scan <pattern>
+    grep -rlniE "$1" process/ stacks/ modules/ tooling/ examples/ \
+        README.md SETUP.md ADOPTION.md CLAUDE.md.template 2>/dev/null | sort -u
+}
+fact_check() {  # fact_check <label> <baseline> <pattern>
+    n=$(fact_scan "$3" | wc -l | tr -d ' ')
+    if [ "$n" -le "$2" ]; then
+        ok "$1: $n files (baseline $2)"
+        [ "$n" -lt "$2" ] && printf '        note: improved -- lower the baseline to %s\n' "$n"
+    else
+        bad "$1 spread to $n files (baseline $2) -- see CONTRIBUTING.md > Canonical locations"
+        fact_scan "$3" | sed 's/^/          /'
+    fi
+}
+
+fact_check "human review: peer vs solo" 12 'peer review|reviewer .{0,12}(other than|!=)|own acceptance review'
+fact_check "CI applies to solo too"     4 'CI .{0,30}(solo|not run by the party)|solo.{0,40}\bCI\b'
+fact_check "receipt: status vs reqs"    2 'status.{0,60}requirement|requirement.{0,60}status'
+fact_check "scope-tier artifacts"       8 'Small.{0,60}spec\.md|spec\.md.{0,40}Small'
+
 # --- 8. No dependency on an unshipped constitution (ratchet) ----------------
 # Layers 1 and 2 used to cite constitution principles (I, X, XVI, XVII) as the
 # authority behind the Definition of Done and the review templates -- a document
