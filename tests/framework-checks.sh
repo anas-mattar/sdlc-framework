@@ -675,53 +675,179 @@ fi
 # allows the right paths, before it is ever installed anywhere. A guard failing
 # open is the one defect that hides itself.
 echo "Package guard behavior"
-guard_case() {  # guard_case <file_path> <expected_exit>
-    printf '{"tool_name":"Edit","tool_input":{"file_path":"%s"}}' "$1" \
-        | sh tooling/claude/hooks/guard-packages.sh >/dev/null 2>&1
-    [ "$?" = "$2" ]
-}
-g_bad=""
-g_n=0
-# The guard's own configuration is guarded too: without those cases an agent that
-# is blocked simply writes the approval marker whose name the block message gave
-# it. And the match must be case-INSENSITIVE, because macOS -- where this
-# framework directs users to the .sh hook -- has a case-insensitive filesystem,
-# so `Package.json` writes the real manifest.
-for c in "package.json:2" "src/Api/Api.csproj:2" "pyproject.toml:2" "go.mod:2" \
-         "Cargo.toml:2" "Gemfile:2" "requirements-dev.txt:2" \
-         "Package.json:2" "GEMFILE:2" "src/Api/Api.CSPROJ:2" \
-         ".claude/allow-package-changes:2" ".claude/settings.json:2" \
-         ".claude/settings.local.json:2" ".claude/hooks/guard-packages.sh:2" \
-         "C:\\\\proj\\\\.claude\\\\settings.json:2" \
-         "src/app.ts:0" "docs/notes-package.json:0" "vendor/Gemfile/readme.md:0" \
-         "src/claude/notes.md:0"; do
-    g_n=$((g_n + 1))
-    guard_case "${c%:*}" "${c##*:}" || g_bad="$g_bad ${c%:*}"
-done
-if [ -z "$g_bad" ]; then ok "guard blocks manifests and its own config, allows ordinary files ($g_n cases)"
-else bad "guard gave the wrong answer for:$g_bad"; fi
+# Both implementations, the same payloads, one fixture. The cases used to be two
+# lists of shell strings here, .sh only, formatted with printf -- which meant no
+# case could contain a double quote, which is precisely the input that defeated
+# the parser, and no case ever ran against the .ps1 hooks at all. Parity was
+# certified by diffing the two pattern LISTS as text; that check passed while the
+# .sh hook truncated its input at the first quote and its self-guard ignored case.
+# Comparing behaviour is the only version of this check that can see the code
+# AROUND the list, which is where all of it lived. tests/fixtures/guard-cases.tsv.
+GUARD_FIXTURES=tests/fixtures/guard-cases.tsv
+if [ ! -f "$GUARD_FIXTURES" ]; then
+    bad "missing $GUARD_FIXTURES -- the guards have no behavioural coverage"
+else
+    # The .ps1 side runs in ONE process, driven by tests/run-guard-cases.ps1, which
+    # prints `<case-number><TAB><exit-code>` per case. Spawning pwsh per case cost a
+    # process launch each time and took the suite from seconds to minutes on
+    # Windows, and a self-test that slow stops being run -- which would leave the
+    # .ps1 hooks exactly as unexercised as they were before this check existed.
+    have_pwsh=0
+    ps_file="${TMPDIR:-/tmp}/sdlc-guard-ps.$$"
+    if command -v pwsh >/dev/null 2>&1; then
+        have_pwsh=1
+        pwsh -NoProfile -File tests/run-guard-cases.ps1 >"$ps_file" 2>/dev/null
+        exec 3<"$ps_file"
+    fi
 
-# The install guard covers the paths the file guard cannot see. `npm install` is a
-# Bash call: before this hook existed every real way of adding a dependency was
-# invisible to the framework while it reported GUARD: verified.
-install_case() {  # install_case <command> <expected_exit>
-    printf '{"tool_name":"Bash","tool_input":{"command":"%s"}}' "$1" \
-        | sh tooling/claude/hooks/guard-installs.sh >/dev/null 2>&1
-    [ "$?" = "$2" ]
-}
-i_bad=""
-i_n=0
-for c in "npm install left-pad|2" "npm i left-pad|2" "yarn add zod|2" \
-         "cd app && pnpm add react|2" "dotnet add package Serilog|2" \
-         "pip install requests|2" "go get github.com/x/y|2" "cargo add serde|2" \
-         "composer require x/y|2" "gem install rails|2" \
-         "npm run build|0" "npm info left-pad|0" "yarn test|0" \
-         "git status|0" "dotnet build app.sln|0"; do
-    i_n=$((i_n + 1))
-    install_case "${c%|*}" "${c##*|}" || i_bad="$i_bad [${c%|*}]"
-done
-if [ -z "$i_bad" ]; then ok "install guard blocks dependency commands and allows build commands ($i_n cases)"
-else bad "install guard gave the wrong answer for:$i_bad"; fi
+    g_bad=""; p_bad=""; c_n=0
+    TAB=$(printf '\t')
+    CR=$(printf '\r')
+    # A file redirect, not a pipe: the loop must run in THIS shell or the counters
+    # and the failure lists do not survive it.
+    while IFS="$TAB" read -r hook want payload note; do
+        case "$hook" in ''|\#*) continue ;; esac
+        [ -n "$payload" ] || continue
+        c_n=$((c_n + 1))
+        printf '%s' "$payload" | sh "tooling/claude/hooks/guard-$hook.sh" >/dev/null 2>&1
+        sh_rc=$?
+        if [ "$sh_rc" != "$want" ]; then
+            g_bad="$g_bad
+          guard-$hook.sh returned $sh_rc, expected $want -- $note"
+        fi
+        [ "$have_pwsh" = 1 ] || continue
+        # Read the .ps1 answers in lockstep on fd 3 rather than searching the
+        # output per case: that search was two more processes per case, and this
+        # loop is already the most fork-heavy thing in the suite. The case number
+        # is carried through and checked, so a desync is reported, not hidden.
+        if IFS="$TAB" read -r ps_n ps_rc <&3; then
+            ps_rc=${ps_rc%$CR}
+            [ "$ps_n" = "$c_n" ] || ps_rc="out of step at case $ps_n"
+        else
+            ps_rc="no answer"
+        fi
+        if [ "$ps_rc" != "$sh_rc" ]; then
+            p_bad="$p_bad
+          guard-$hook: sh=$sh_rc ps1=$ps_rc -- $note"
+        fi
+    done < "$GUARD_FIXTURES"
+    if [ "$have_pwsh" = 1 ]; then exec 3<&-; rm -f "$ps_file"; fi
+
+    if [ "$c_n" -eq 0 ]; then
+        bad "$GUARD_FIXTURES parsed to zero cases -- is it still TAB-separated?"
+    elif [ -z "$g_bad" ]; then
+        ok "guards block manifests, installs and their own perimeter ($c_n cases)"
+    else
+        bad "the .sh guards gave the wrong answer:"; printf '%s\n' "$g_bad"
+    fi
+
+    if [ "$have_pwsh" != 1 ]; then
+        # "must not skip in CI" was written in the MESSAGE and nowhere in the code,
+        # so the suite went green on a runner without pwsh and the entire parity
+        # guarantee rested on ubuntu-latest continuing to ship it. Check 5 already
+        # had this shape; this is the same `if [ -n "${CI:-}" ]` it uses.
+        if [ -n "${CI:-}" ]; then
+            bad "the .ps1 guards were not executed in CI (pwsh not installed) -- the parity check is the only thing comparing the two implementations, and a skipped check is a check that is not running"
+        else
+            meh "the .ps1 guards were not executed (pwsh not installed) -- must not skip in CI"
+        fi
+    elif [ "$c_n" -eq 0 ]; then
+        : # already reported
+    elif [ -z "$p_bad" ]; then
+        ok "guard-*.sh and guard-*.ps1 agree on all $c_n payloads"
+    else
+        bad "the two implementations disagree:"; printf '%s\n' "$p_bad"
+    fi
+fi
+
+# The JSON extractor is duplicated into both .sh hooks rather than sourced from a
+# shared file: a hook that cannot find its library dies, and a PreToolUse hook that
+# dies fails OPEN. Duplication is the safer failure mode, but only if the copies
+# cannot drift -- so they are compared byte for byte, the same convention the
+# pattern lists use.
+#
+# This is a DRIFT check and nothing more. It is a byte diff between the two .sh
+# files: breaking both copies identically passes it, and it does not touch the
+# .ps1 hooks at all. It used to be labelled "both .sh guards carry the same JSON
+# extractor", which reads like a correctness claim -- the correctness claim is the
+# fixture two checks up, and the label now says which is which.
+je_a=$(sed -n '/JSON-EXTRACT-BEGIN/,/JSON-EXTRACT-END/p' tooling/claude/hooks/guard-installs.sh)
+je_b=$(sed -n '/JSON-EXTRACT-BEGIN/,/JSON-EXTRACT-END/p' tooling/claude/hooks/guard-packages.sh)
+if [ -z "$je_a" ] || [ -z "$je_b" ]; then
+    bad "the JSON-EXTRACT block is missing from one or both .sh guards"
+elif [ "$je_a" = "$je_b" ]; then
+    ok "the JSON extractor has not drifted between the two .sh guards (text only -- behaviour is the fixture above)"
+else
+    bad "the JSON extractor has drifted between guard-installs.sh and guard-packages.sh"
+fi
+
+# --- 11b. The two stub ratchets return the same answers ---------------------
+# The marker-string comparison above is the check that passed while `sh` counted 1
+# and `pwsh` counted 3 on the same tree. The regexes were never the problem: the
+# file filter next to them disagreed about paths, and PowerShell's Select-String
+# and -notmatch are case-INSENSITIVE by default, so `// todo:` counted on one
+# platform only. The behavioural-parity machinery built for the guards is exactly
+# what this needed; here it is, over the same repository the ratchet would run on.
+echo "Stub ratchet behavior"
+STUB_PATHS=tests/fixtures/stub-paths.txt
+STUB_LINES=tests/fixtures/stub-lines.md
+if [ ! -f "$STUB_PATHS" ] || [ ! -f "$STUB_LINES" ]; then
+    bad "missing $STUB_PATHS or $STUB_LINES -- the stub ratchet has no behavioural coverage"
+elif ! command -v pwsh >/dev/null 2>&1; then
+    if [ -n "${CI:-}" ]; then
+        bad "check-stubs.ps1 was not executed in CI (pwsh not installed) -- the two ratchets are then compared by their constants only"
+    else
+        meh "check-stubs.sh vs .ps1 behaviour (pwsh not installed)"
+    fi
+else
+    # 1. the same count on this repository's own tree
+    cs_sh=$(sh tooling/gate/check-stubs.sh --count 2>/dev/null)
+    cs_ps=$(pwsh -NoProfile -File tooling/gate/check-stubs.ps1 -Count 2>/dev/null | tr -d ' \r\n')
+    if [ -z "$cs_sh" ] || [ -z "$cs_ps" ]; then
+        bad "one of the stub ratchets produced no count"
+    elif [ "$cs_sh" = "$cs_ps" ]; then
+        ok "check-stubs.sh and .ps1 count the same $cs_sh markers on this tree"
+    else
+        bad "the two stub ratchets disagree on this tree: sh=$cs_sh ps1=$cs_ps"
+    fi
+
+    # 2. the same source/skip verdict on every fixture path
+    cs_args=$(grep -v '^[[:space:]]*#' "$STUB_PATHS" | grep -v '^[[:space:]]*$')
+    cs_sh_out="${TMPDIR:-/tmp}/cs-cls-sh.$$"
+    cs_ps_out="${TMPDIR:-/tmp}/cs-cls-ps.$$"
+    # shellcheck disable=SC2086
+    set -f
+    sh tooling/gate/check-stubs.sh --classify $cs_args > "$cs_sh_out" 2>/dev/null
+    pwsh -NoProfile -File tooling/gate/check-stubs.ps1 -Classify "$(printf '%s' "$cs_args" | tr '\n' ',')" \
+        2>/dev/null | tr -d '\r' > "$cs_ps_out"
+    set +f
+    if [ ! -s "$cs_sh_out" ] || [ ! -s "$cs_ps_out" ]; then
+        bad "one of the stub ratchets classified nothing -- is $STUB_PATHS still one path per line?"
+    elif diff "$cs_sh_out" "$cs_ps_out" >/dev/null 2>&1; then
+        ok "check-stubs.sh and .ps1 classify all $(grep -c '' "$cs_sh_out" | tr -d ' ') fixture paths the same way"
+    else
+        bad "the two stub ratchets disagree about which paths are source:"
+        diff "$cs_sh_out" "$cs_ps_out" | sed 's/^/          /'
+    fi
+    rm -f "$cs_sh_out" "$cs_ps_out"
+
+    # 3. the same LINES of the same file. Compare `path:lineno` only -- the line
+    #    text carries CR on a Windows checkout and that is not a disagreement.
+    ln_sh=$(sh tooling/gate/check-stubs.sh --scan "$STUB_LINES" 2>/dev/null | cut -d: -f1,2)
+    ln_ps=$(pwsh -NoProfile -File tooling/gate/check-stubs.ps1 -Scan "$STUB_LINES" 2>/dev/null \
+        | tr -d '\r' | cut -d: -f1,2)
+    if [ -z "$ln_sh" ] || [ -z "$ln_ps" ]; then
+        bad "one of the stub ratchets found no markers in $STUB_LINES"
+    elif [ "$ln_sh" = "$ln_ps" ]; then
+        ok "check-stubs.sh and .ps1 flag the same $(printf '%s\n' "$ln_sh" | grep -c '') lines (case, and the approved-stub reason)"
+    else
+        bad "the two stub ratchets flag different lines of $STUB_LINES:"
+        printf '%s\n' "$ln_sh" > "${TMPDIR:-/tmp}/cs-ln-sh.$$"
+        printf '%s\n' "$ln_ps" > "${TMPDIR:-/tmp}/cs-ln-ps.$$"
+        diff "${TMPDIR:-/tmp}/cs-ln-sh.$$" "${TMPDIR:-/tmp}/cs-ln-ps.$$" | sed 's/^/          /'
+        rm -f "${TMPDIR:-/tmp}/cs-ln-sh.$$" "${TMPDIR:-/tmp}/cs-ln-ps.$$"
+    fi
+fi
 
 # --- 12. All four gate scripts exclude the same paths ----------------------
 # The receipt machinery is copied into four scripts (node/dotnet x sh/ps1) and

@@ -1,5 +1,5 @@
 {
-  "$comment": "Copy into <project>/.claude/settings.json. TWO guards ship: guard-packages watches Edit/Write against manifest FILES, and guard-installs watches Bash for the install COMMANDS that rewrite those same manifests (npm i, dotnet add package, pip install, go get). Both are needed — the file guard alone covers the least likely path. Both ship with the Windows/PowerShell command because that is the platform where the POSIX form fails OPEN: if `sh` is absent the hook exits 127, which is a hook ERROR, not a block, so the guard silently stops guarding. On macOS/Linux swap the hook commands for: sh .claude/hooks/guard-packages.sh and sh .claude/hooks/guard-installs.sh. Whichever you use, run .claude/hooks/verify-guard.ps1 (or verify-guard.sh) after install — it proves the guard actually blocks instead of assuming it does. Extend the allowlist with project-specific read-only commands as prompts appear.",
+  "$comment": "Copy into <project>/.claude/settings.json. TWO guards ship: guard-packages watches Edit/Write against manifest FILES, and guard-installs watches Bash for the install COMMANDS that rewrite those same manifests (npm i, dotnet add package, pip install, go get). Both are needed — the file guard alone covers the least likely path. Both ship with the Windows/PowerShell command because that is the platform where the POSIX form fails OPEN: if `sh` is absent the hook exits 127, which is a hook ERROR, not a block, so the guard silently stops guarding. On macOS/Linux swap the hook commands for: sh .claude/hooks/guard-packages.sh and sh .claude/hooks/guard-installs.sh. Whichever you use, run .claude/hooks/verify-guard.ps1 (or verify-guard.sh) after install — it proves the guard actually blocks instead of assuming it does. Extend the allowlist with project-specific read-only commands as prompts appear. Every allow entry names a TOOL: Bash, Edit, Read and so on. `PowerShell(...)` was in this list for three releases and matched nothing, because Claude Code has no PowerShell tool -- a .ps1 gate is run THROUGH Bash, which is why the entry below reads `Bash(pwsh -File ...)`. An entry naming a tool that does not exist is not an error anywhere; it is simply never consulted, so the prompt it was meant to suppress appears anyway and the permission it was meant to grant is not granted.",
   "permissions": {
     "allow": [
       "Bash(git status:*)",
@@ -8,7 +8,7 @@
       "Bash(git branch:*)",
       "Bash(git remote -v)",
       "Bash(./gate.sh --verify)",
-      "PowerShell(./gate.ps1 -Verify)",
+      "Bash(pwsh -File ./gate.ps1 -Verify)",
       "Bash(dotnet build:*)",
       "Bash(dotnet test:*)",
       "Bash(yarn check:*)",

@@ -20,9 +20,23 @@
 # dies with "string is missing the terminator". A hook that dies fails OPEN.
 
 $inputJson = [Console]::In.ReadToEnd()
-try { $data = $inputJson | ConvertFrom-Json } catch { exit 0 }
+# Fail CLOSED when the payload names a target this hook cannot read. `catch { exit 0 }`
+# treated a malformed payload as nothing to judge, which is the same silent pass the
+# .sh hook's `|| exit 0` gave -- see the JSON-EXTRACT block there. A payload with no
+# path at all is still allowed: that is a tool this hook does not judge.
+$data = $null
+try { $data = $inputJson | ConvertFrom-Json } catch {
+    if ($inputJson -match '"(file_path|notebook_path)"') {
+        [Console]::Error.WriteLine("BLOCKED: the package guard could not read the target path out of the hook payload, so it cannot tell whether this edits a package manifest. This is a bug in the guard, not in your edit -- report it with the path you were editing.")
+        exit 2
+    }
+    exit 0
+}
 
+# NotebookEdit is in this hook's matcher and reports its target as `notebook_path`,
+# so file_path alone made every NotebookEdit call invisible to the guard.
 $filePath = $data.tool_input.file_path
+if (-not $filePath) { $filePath = $data.tool_input.notebook_path }
 if (-not $filePath) { exit 0 }
 
 # Split-Path handles backslashes but not forward slashes in every PowerShell
@@ -73,10 +87,19 @@ $guarded = @(
 )
 
 foreach ($pat in $guarded) {
-    if ($name -like $pat) {
-        if (Test-Path '.claude/allow-package-changes') { exit 0 }
-        [Console]::Error.WriteLine("BLOCKED: '$filePath' is a package manifest/lockfile. Adding or changing packages requires approval in the feature's plan.md (or spec.md on Small-tier projects, which have no plan.md). If the approved spec covers it, ask the user to create .claude/allow-package-changes and retry.")
-        exit 2
+    # A pattern that NAMES a directory is matched against the PATH, not the
+    # basename. `.cargo/config.toml` and `.bundle/config` were in this list for
+    # three releases and could never fire: the basename of the first is
+    # `config.toml` and of the second `config`, so neither ever equalled its own
+    # pattern. Those two files decide where every package in the project comes
+    # from, which is the case this list calls worse than a manifest edit.
+    if ($pat.Contains('/')) {
+        if (-not ($norm -like $pat -or $norm -like "*/$pat")) { continue }
+    } elseif (-not ($name -like $pat)) {
+        continue
     }
+    if (Test-Path '.claude/allow-package-changes') { exit 0 }
+    [Console]::Error.WriteLine("BLOCKED: '$filePath' is a package manifest/lockfile. Adding or changing packages requires approval in the feature's plan.md (or spec.md on Small-tier projects, which have no plan.md). If the approved spec covers it, ask the user to create .claude/allow-package-changes and retry.")
+    exit 2
 }
 exit 0

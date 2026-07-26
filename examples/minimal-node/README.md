@@ -24,16 +24,23 @@ half a day to reach it on a stack that already ships rules — see `SETUP.md`.
 my-app/
 ├── CLAUDE.md                      # ← in this folder: the real, fully filled file
 ├── gate.sh                        # ← copied from tooling/gate/gate-node.sh
+├── check-stubs.sh                 # ← copied from tooling/gate/check-stubs.sh
+├── .gate-stubs-baseline           # ← generated: sh check-stubs.sh --baseline
+├── .gate-sha256                   # ← generated: sha256sum gate.sh check-stubs.sh
+│                                  #    .gate-stubs-baseline > .gate-sha256
 ├── .gitignore                     # ← in this folder: note the .gate-result.json line
 ├── .github/workflows/gate.yml     # ← copied from tooling/ci/gate.yml
+├── .github/CODEOWNERS             # ← copied from tooling/ci/CODEOWNERS
 ├── .claude/
 │   ├── settings.json              # ← copied from tooling/claude/
-│   ├── hooks/                     # ← copied: guard-packages, verify-guard
+│   ├── framework-manifest.json    # ← copied from framework-manifest.template.json
+│   ├── hooks/                     # ← copied: guard-packages, guard-installs,
+│   │                              #    verify-guard
 │   └── commands/                  # ← copied: phase-review, phase-done,
 │                                  #    framework-doctor, framework-upgrade
 ├── docs/
 │   ├── process/                   # ← copied verbatim from process/
-│   ├── stack-frontend/            # ← copied verbatim from stacks/nextjs-trpc/
+│   ├── stacks/nextjs-trpc/        # ← copied verbatim from stacks/nextjs-trpc/
 │   └── project/                   # ← copied from tooling/project-docs/ (starts empty)
 └── specs/
     ├── _templates/                # ← copied from process/templates/

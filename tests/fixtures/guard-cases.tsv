@@ -1,0 +1,112 @@
+# Behavioural fixture for the two guard hooks. TAB-separated, four columns:
+#
+#     hook	expected-exit	payload (one line of JSON, verbatim)	what it is
+#
+# hook is `installs` or `packages`; the runner appends `.sh` and `.ps1` and feeds
+# the payload to BOTH. Every row asserts two things: that each implementation
+# returns the expected code, and that the two agree with each other.
+#
+# WHY THIS FILE EXISTS. Parity used to be certified by comparing the pattern
+# LISTS between the .sh and .ps1 hooks -- text against text. That can only ever
+# catch someone editing one list and forgetting the other. It cannot see the code
+# around the list, which is where every parity defect in v2.3.0 actually lived:
+# the .sh hook parsed its input with a regex that truncated at the first double
+# quote while the .ps1 hook used ConvertFrom-Json, and the .sh self-guard sat
+# above the case fold while PowerShell's -like was case-insensitive by nature.
+# Both hooks passed the string comparison the whole time. A fixture both
+# implementations are EXECUTED against is what closes that class.
+#
+# Exit codes: 2 blocks the tool call, 0 allows it. There is no third answer.
+#
+# Adding a case is the cheapest possible fix for a guard bug: put the payload
+# that got through here first, watch it fail on both platforms, then fix it.
+#
+# --- guard-installs: the parser -------------------------------------------
+installs	2	{"tool_name":"Bash","tool_input":{"command":"npm install left-pad"}}	plain install
+installs	2	{"tool_name":"Bash","tool_input":{"command":"echo \"installing deps\" && npm install left-pad"}}	install after a QUOTED echo -- the N1 defect
+installs	2	{"tool_name":"Bash","tool_input":{"command":"npm\tinstall left-pad"}}	install split by an escaped tab
+installs	2	{"tool_name":"Bash","tool_input":{"command":"echo hi\nnpm install left-pad"}}	install on a second line
+installs	2	{"tool_input":{"description":"sets \"command\":\"ls\"","command":"npm install evil"}}	decoy "command" inside an earlier string value
+installs	2	{"tool_name":"Bash","tool_input":{"command":"echo {\"command\": \"ls\"} && npm install evil"}}	decoy JSON inside the command itself
+installs	2	{"tool_input":{"command":"npm install left-pad	truncated payload: the key is there, the value is unreadable
+installs	0	{"tool_name":"Write","tool_input":{"file_path":"a.txt"}}	no command key at all -- not this hook's business
+# --- guard-installs: the list ----------------------------------------------
+installs	2	{"tool_name":"Bash","tool_input":{"command":"cd app && pnpm add react"}}	install inside a chain
+installs	2	{"tool_name":"Bash","tool_input":{"command":"FOO=1 npm install left-pad"}}	install behind an env prefix
+installs	2	{"tool_name":"Bash","tool_input":{"command":"dotnet add package Serilog"}}	dotnet install
+installs	2	{"tool_name":"Bash","tool_input":{"command":"pip install requests"}}	pip install
+installs	2	{"tool_name":"Bash","tool_input":{"command":"NPM INSTALL left-pad"}}	install shouted -- `case` is case-sensitive and `-like` is not
+installs	0	{"tool_name":"Bash","tool_input":{"command":"npm run build"}}	build, not install
+installs	0	{"tool_name":"Bash","tool_input":{"command":"npm info left-pad"}}	`npm i` must not match `npm info`
+installs	0	{"tool_name":"Bash","tool_input":{"command":"git status"}}	unrelated command
+# --- guard-installs: the guard's own perimeter (N2) ------------------------
+installs	2	{"tool_name":"Bash","tool_input":{"command":"touch .claude/allow-package-changes"}}	creating the approval marker from the shell
+installs	2	{"tool_name":"Bash","tool_input":{"command":"printf {} > .claude/settings.json"}}	overwriting the hook configuration
+installs	2	{"tool_name":"Bash","tool_input":{"command":"rm .claude/hooks/guard-packages.sh"}}	deleting the other hook
+installs	2	{"tool_name":"Bash","tool_input":{"command":"RM .claude/HOOKS/guard-packages.sh"}}	the same, shouted
+installs	2	{"tool_name":"Bash","tool_input":{"command":"cp /tmp/x .claude/settings.local.json"}}	overwriting the local override
+installs	0	{"tool_name":"Bash","tool_input":{"command":"cat .claude/settings.json"}}	READING the configuration is how the doctor works
+installs	0	{"tool_name":"Bash","tool_input":{"command":"sh .claude/hooks/verify-guard.sh"}}	RUNNING a hook is how verification works
+installs	0	{"tool_name":"Bash","tool_input":{"command":"chmod +x gate.sh"}}	setup does this; gate.sh is pinned, not hook-guarded
+# --- guard-installs: quoting defeated the MATCHER, one layer below the parser (R4)
+installs	2	{"tool_name":"Bash","tool_input":{"command":"sh -c \"npm install evil\""}}	install inside sh -c \"...\" -- the R4 defect
+installs	2	{"tool_name":"Bash","tool_input":{"command":"eval \"pip install requests\""}}	install inside eval \"...\"
+installs	2	{"tool_name":"Bash","tool_input":{"command":"(cd app && npm install evil)"}}	install inside a subshell
+installs	2	{"tool_name":"Bash","tool_input":{"command":"echo hi; npm install evil"}}	install after a semicolon
+installs	2	{"tool_name":"Bash","tool_input":{"command":"npx cowsay hi"}}	bare npx downloads the package
+installs	2	{"tool_name":"Bash","tool_input":{"command":"pnpm dlx create-thing"}}	dlx downloads the package
+# --- guard-installs: a read may not shelter a write in the same command (R2)
+installs	2	{"tool_name":"Bash","tool_input":{"command":"ls .claude/settings.json && printf {} > .claude/settings.json"}}	read first, then write -- the R2 defect
+installs	2	{"tool_name":"Bash","tool_input":{"command":"cat .claude/hooks/g.sh; rm .claude/hooks/g.sh"}}	read first, then delete
+installs	2	{"tool_name":"Bash","tool_input":{"command":"cat .claude/settings.json > .claude/settings.local.json"}}	read one perimeter file INTO another
+# --- guard-installs: the perimeter verb list was a blocklist (R3) -----------
+installs	2	{"tool_name":"Bash","tool_input":{"command":"sed -i s/a/b/ .claude/settings.json"}}	sed -i is how an agent edits a config -- the R3 defect
+installs	2	{"tool_name":"Bash","tool_input":{"command":"/bin/rm .claude/settings.json"}}	rm reached by absolute path
+installs	2	{"tool_name":"Bash","tool_input":{"command":"git checkout -- .claude/hooks/"}}	git checkout restores over the hooks
+installs	2	{"tool_name":"Bash","tool_input":{"command":"git clean -fd .claude"}}	git clean removes untracked hooks
+installs	2	{"tool_name":"Bash","tool_input":{"command":"rm -rf .claude"}}	the whole perimeter directory, naming no file inside it
+installs	2	{"tool_name":"Bash","tool_input":{"command":"perl -pi -e s/x/y/ .claude/settings.json"}}	perl -pi edits in place
+installs	2	{"tool_name":"Bash","tool_input":{"command":"python -c open('.claude/settings.json','w')"}}	python rewrites the file
+installs	2	{"tool_name":"Bash","tool_input":{"command":"sh -c \"rm .claude/hooks/guard-installs.sh\""}}	the verb hidden inside sh -c
+installs	2	{"tool_name":"Bash","tool_input":{"command":"find .claude/hooks/ -delete"}}	find -delete, verb after the path
+installs	2	{"tool_name":"Bash","tool_input":{"command":"echo .claude/hooks/x | xargs rm"}}	xargs, verb in the next segment
+installs	0	{"tool_name":"Bash","tool_input":{"command":"cp .claude/settings.json /tmp/backup.json"}}	copying the config OUT is a read -- the R13 over-block
+installs	0	{"tool_name":"Bash","tool_input":{"command":"git diff .claude/settings.json"}}	git diff is a read
+installs	0	{"tool_name":"Bash","tool_input":{"command":"grep -r matcher .claude/settings.json"}}	grep is a read
+installs	0	{"tool_name":"Bash","tool_input":{"command":"test -f .claude/settings.json"}}	test is a read
+installs	0	{"tool_name":"Bash","tool_input":{"command":"cat .claude/settings.json > /tmp/copy.json"}}	redirecting a read OUT is still a read
+# --- the extractor's contract: scope, escapes and truncation (R10-R12) ------
+installs	2	{"tool_name":"Bash","tool_input":{"command":"\u006epm install left-pad"}}	a unicode escape must DECODE, not become a space -- the R10 defect
+installs	0	{"command":"npm install evil","tool_input":{"file_path":"a.txt"}}	a command key OUTSIDE tool_input is not this call's command -- the R11 defect
+installs	2	{"tool_input":{"command":"npm install left-pad"	truncated after the value: the payload is unreadable
+installs	2	{"tool_input":{"command":	truncated after the colon
+installs	2	{"tool_input":{"command"	truncated after the key name -- the R12 defect
+installs	2	{"tool_name":"Bash","tool_input":{"command":"npm install left\u002dpad"}}	a unicode escape inside the argument
+installs	0	{"tool_name":"Bash","tool_input":{"command":"npm run\u0020build"}}	a decoded escape must not turn a build into an install
+# --- guard-packages: the parser --------------------------------------------
+packages	2	{"tool_input":{"file_path":"package.json"}}	plain manifest
+packages	2	{"tool_input":{"file_path":"a\"b/package.json"}}	manifest under a path containing a quote
+packages	2	{"tool_input":{"file_path":"package.json	truncated payload: the key is there, the value is unreadable
+packages	0	{"tool_name":"Bash","tool_input":{"command":"ls"}}	no path key at all -- not this hook's business
+packages	0	{"tool_input":{"notebook_path":"analysis.ipynb"}}	NotebookEdit on something that is not a manifest
+# --- guard-packages: the list ----------------------------------------------
+packages	2	{"tool_input":{"file_path":"src/Api/Api.csproj"}}	csproj
+packages	2	{"tool_input":{"file_path":"src/Api/Api.CSPROJ"}}	csproj, shouted
+packages	2	{"tool_input":{"file_path":"Package.json"}}	manifest as macOS reports it
+packages	2	{"tool_input":{"file_path":"GEMFILE"}}	Gemfile, shouted
+packages	2	{"tool_input":{"file_path":"requirements-dev.txt"}}	glob pattern
+packages	0	{"tool_input":{"file_path":"src/app.ts"}}	ordinary source file
+packages	0	{"tool_input":{"file_path":"docs/notes-package.json"}}	lookalike, not a manifest
+packages	0	{"tool_input":{"file_path":"vendor/Gemfile/readme.md"}}	a DIRECTORY called Gemfile
+packages	0	{"tool_input":{"file_path":"src/claude/notes.md"}}	`claude` in the path, not `.claude`
+# --- guard-packages: the guard's own perimeter (N2) ------------------------
+packages	2	{"tool_input":{"file_path":".claude/allow-package-changes"}}	the approval marker
+packages	2	{"tool_input":{"file_path":".claude/Allow-Package-Changes"}}	the marker, capitalised -- the N2 defect
+packages	2	{"tool_input":{"file_path":".claude/settings.json"}}	the hook configuration
+packages	2	{"tool_input":{"file_path":".claude/Settings.json"}}	the configuration, capitalised -- the N2 defect
+packages	2	{"tool_input":{"file_path":".claude/SETTINGS.json"}}	the configuration, shouted
+packages	2	{"tool_input":{"file_path":".Claude/settings.json"}}	the DIRECTORY capitalised
+packages	2	{"tool_input":{"file_path":".claude/settings.local.json"}}	the local override
+packages	2	{"tool_input":{"file_path":".claude/hooks/guard-packages.sh"}}	the hook script itself
+packages	2	{"tool_input":{"file_path":"C:\\proj\\.claude\\settings.json"}}	the configuration as Windows reports it
+packages	2	{"tool_input":{"file_path":"./.claude//settings.json"}}	the configuration with redundant separators

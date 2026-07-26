@@ -65,9 +65,36 @@ Close a row by striking it through and adding the commit that remediated it:
 | ~~2026-03-04~~ | ~~014-payment-retry ph2~~ | ~~5, 6~~ | ~~Prod incident~~ | ~~A. Nkemi~~ | **closed 2026-03-09, a1b2c3d** |
 ```
 
-`tooling/ci/gate.yml` ships the check. It reads `docs/exceptions.md`, ignores
-struck-through rows, and fails when any remaining row's *Remediate by* date is in
-the past.
+`tooling/ci/gate.yml` ships the check. It reads `docs/exceptions.md`, ignores rows
+whose first cell is struck through, and fails when any remaining row's *Remediate
+by* date is in the past. Six details are worth knowing before you edit the table,
+and they have one thing in common: **anything this check cannot read, it fails on.**
+A row it skipped would be an exception with no deadline, which is the outcome the
+whole mechanism exists to prevent.
+
+- It finds the deadline by the **column header**, not by position, so you can add
+  or reorder columns. The header must be exactly *Remediate by* or *Due by*
+  (spacing, case and punctuation are ignored; nothing else matches). A column
+  called *Remediation notes* is not the deadline column and will not be mistaken
+  for one. A table with no such header fails the build rather than passing
+  silently — a check that cannot find its input is not a passing check.
+- **One deadline column per table.** Two of them fail the build rather than the
+  check guessing which is binding.
+- The header is the **first row of its table**, and each table is read on its own.
+  A second table with different columns is fine. A header written below its own
+  data rows is not.
+- **Every row must be the same width as its header.** A missing cell, or a stray
+  `|` inside a *Why* cell, moves the deadline into a different column — so it
+  fails rather than being skipped. If a cell needs a pipe, escape it as `\|`.
+- The date must be a **real calendar date**: `2026-13-45`, `9999-99-99` and
+  `2026-02-29` all fail. They used to be accepted and compared as text, which
+  turned a typo into an exception that never came due.
+- Only the **first cell** decides whether a row is closed. Strike the whole row
+  through by all means, but `~~` elsewhere in an open row does not close it.
+- **Deleting the file fails the build** once it has ever existed. Close rows by
+  striking them through; the history of what was accepted, by whom, is the record.
+  A file with **no table at all** is fine — if you close the last exception by
+  removing its rows and leaving a sentence saying so, the check passes.
 
 ## What an exception never covers
 

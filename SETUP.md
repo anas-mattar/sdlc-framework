@@ -170,16 +170,30 @@ unfilled tier line means every rule falls back to the strictest reading.
    - Copy `tooling/ci/gate.yml` to `<repo>/.github/workflows/gate.yml`, uncomment
      **one** toolchain block (both ship commented out), and require the check on
      `main`. Do this on solo projects too (see Q5).
-   - **Pin the gate script.** From each repo root, run `sha256sum gate.sh > .gate-sha256`
-     and commit both. CI refuses to run an unpinned gate. This is what stops
-     `gate.sh` being weakened silently: CI runs a script that lives in the
-     repository, from the pull request's own head branch, so a gate edited to
-     `true` produces a genuine receipt and a green build. Pinning does not prevent
-     the edit — it makes the edit require a second, obvious line in the same diff.
+   - **Baseline the stub ratchet.** From each repo root, run
+     `sh check-stubs.sh --baseline` and commit `.gate-stubs-baseline`. It records
+     how many unimplemented markers the repo has today; CI fails when the number
+     goes up.
+   - **Pin the gate.** From each repo root, run
+     `sha256sum gate.sh check-stubs.sh .gate-stubs-baseline > .gate-sha256`
+     and commit all of it. CI refuses to run an unpinned gate, and it checks that
+     the pin **names** those three files — `sha256sum -c` only verifies the lines
+     it is given, so a pin listing `README.md` and nothing else reports `OK` while
+     the gate sits unpinned. Add `gate.ps1` to the command if your team runs the
+     PowerShell gate.
+
+     This is what stops the gate being weakened silently: CI runs a script that
+     lives in the repository, from the pull request's own head branch, so a gate
+     edited to `true` produces a genuine receipt and a green build. Pinning does
+     not prevent the edit — it makes the edit require a second, obvious line in
+     the same diff. `.gate-stubs-baseline` is in there for the same reason:
+     `echo 9999 > .gate-stubs-baseline` turns the ratchet off, and the script then
+     prints "improved" and exits 0.
    - Copy `tooling/ci/CODEOWNERS` to `<repo>/.github/CODEOWNERS`, replace the
      placeholders, and enable *Require review from Code Owners* in branch
      protection. Everything the gate's verdict rests on — `gate.sh`,
-     `.gate-sha256`, `.github/workflows/`, `.claude/` — lives inside the repository
+     `check-stubs.sh`, `.gate-stubs-baseline`, `.gate-sha256`,
+     `.github/workflows/`, `.claude/` — lives inside the repository
      and can be changed in the same pull request as the work it would excuse.
      CODEOWNERS is the only trust anchor available that sits outside that
      perimeter. Worth doing solo: it makes the approval a timestamped act rather

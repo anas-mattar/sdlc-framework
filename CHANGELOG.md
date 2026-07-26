@@ -16,10 +16,14 @@ who already installed the framework.
 | **None** | Upstream-only (`README.md`, `SETUP.md`, `ADOPTION.md`, `CHANGELOG.md`, `VERSION`). Nothing to do downstream. |
 
 Installed locations come from `README.md` → *Installed Layout*: `process/` →
-`docs/process/`, `stacks/<stack>/` → `docs/stack-backend/` or
-`docs/stack-frontend/`, `modules/contracts/` → `docs/contracts/`,
+`docs/process/`, `stacks/<stack>/` → `docs/stacks/<stack>/`,
+`modules/contracts/` → `docs/contracts/`,
 `tooling/claude/` → `.claude/`, `tooling/gate/` → each repo root,
-`tooling/ci/` → `.github/workflows/`.
+`tooling/ci/` → `.github/workflows/` and `.github/CODEOWNERS`.
+
+(Entries for 2.2.0 and earlier name `docs/stack-backend/` and
+`docs/stack-frontend/`, the two fixed slots 2.3.0 replaced. They are left as
+written: a released entry records what the layout was at the time.)
 
 Run `/framework-upgrade <path-to-framework-repo>` to have this walked for you,
 including detection of local edits that an upgrade would overwrite.
@@ -48,10 +52,10 @@ self-tests that would have caught them.
 the least likely way an agent adds a dependency. `npm i`, `yarn add`,
 `dotnet add package`, `pip install`, `go get` and `cargo add` are `Bash` calls the
 file guard never saw, so a project could run reporting `GUARD: verified` with
-every real install path open. `guard-installs.sh` / `.ps1` closes it: 46 command
+every real install path open. `guard-installs.sh` / `.ps1` closes it: 56 command
 forms, the same approval marker, the same exit codes.
 
-### Self-tests: 34 assertions -> 66
+### Self-tests: 34 assertions -> 91, across four suites
 
 The suite passed while examining almost nothing. Each of these is a check that
 now tests what the README already claimed it tested:
@@ -79,6 +83,16 @@ now tests what the README already claimed it tested:
 - New ratchet: no document outside `gate-command.md` may offer an exit code as
   gate evidence. This is what let a MANDATORY stack checklist keep saying
   "confirmed exit code 0" for two releases after v2.0.0 removed it.
+- **The CI exceptions step had no tests at all.** New `tests/exceptions-check.sh`:
+  21 cases, and the awk program is extracted from the shipped `gate.yml` between
+  marker comments rather than copied, so a test cannot go on passing after the
+  code it covers has drifted.
+- **The `.ps1` parity checks now FAIL in CI when `pwsh` is missing** rather than
+  skipping. "must not skip in CI" was in the message and nowhere in the code, so
+  the whole parity guarantee rested on `ubuntu-latest` continuing to ship it.
+- **The stub ratchet is compared behaviourally**, not by its constants — same
+  count on the tree, same source/skip verdict on 46 fixture paths, same flagged
+  lines in one fixture file.
 
 ### `verify-guard` was blind to the wiring
 
@@ -362,6 +376,214 @@ compose files. **A registry redirect is worse than a manifest edit** — it repo
 every dependency in the project at once while the manifest and the lockfile still
 look pristine, so the diff a reviewer reads says nothing changed.
 
+### The second implementation always lagged — so parity is now behavioural
+
+An adversarial re-review of this release's own patches found the same shape eight
+times: a control was added, and its twin was not brought along. Three of those
+defeated controls this release shipped, each with a single character.
+
+| Was | Now |
+|---|---|
+| **One double quote defeated the entire install guard.** The `.sh` hooks pulled their input out of the payload with `sed -n 's/.*"command".*"\([^"]*\)".*/\1/p'`. `[^"]*` stops at the first quote and nothing un-escapes `\"`, so the guard inspected a truncated string: `npm install left-pad` was blocked, and `echo "installing deps" && npm install left-pad` — ordinary shell, not an evasion — was **allowed**. A literal tab or newline did the same. `guard-packages.sh` had the identical defect on `file_path`. The `.ps1` twins used `ConvertFrom-Json` and were never affected, so this was also a platform split on exactly the hook macOS and Linux users are told to run. | Both `.sh` hooks parse the payload with a string-aware `awk` walk that decodes escapes and only accepts a string as a key when a `:` follows it — so a decoy `"command":"ls"` inside another value is skipped, which the old greedy `.*` got wrong in the other direction by taking the *last* match. One `awk` replaces the two forks it removes. `awk`, not `python3`: this runs on every Bash call and POSIX `awk` is already a dependency of the platform. |
+| **Extraction failure meant "allow".** `[ -n "$cmd" ] \|\| exit 0` and the `.ps1` `catch { exit 0 }` both treated an unreadable payload as nothing to judge. | The extractor distinguishes *no such key* (exit 0 — a tool this hook does not judge) from *key present but unreadable* (exit 2). Both platforms now fail closed on a malformed payload, and say so. |
+| **The self-guard was case-sensitive, nine lines above the case fold that fixed exactly that bug for manifests.** `.claude/settings.json` was blocked; `.claude/Settings.json`, `.claude/SETTINGS.json`, `.Claude/settings.json` and `.claude/Allow-Package-Changes` were **allowed**. On case-insensitive macOS those are the same file, so one `Write` disabled both hooks. The suite tested `Package.json` for case but never the self-guard. | The self-guard moved below the fold and matches the folded path. `.ps1` was already correct — `-like` is case-insensitive — so this closed a parity gap rather than opening one. |
+| **`guard-installs` guarded none of the paths `guard-packages` protects**, so `touch .claude/allow-package-changes`, `printf '{}' > .claude/settings.json` and `rm .claude/hooks/guard-packages.sh` all passed through the Bash hook untouched. The argument in `guard-packages`' own comment — that the block "has to be here, at the moment of the write" — applied verbatim to the hook this release had just added. | Both install guards block **mutation** of the guard's own perimeter, and only mutation: `cat .claude/settings.json` and `sh .claude/hooks/verify-guard.sh` still work, because that is how the doctor reads them. There is deliberately no marker escape hatch — the marker cannot authorise its own creation. `gate.sh` and `.gate-sha256` are deliberately *not* here: they are pinned by CI and owned in CODEOWNERS, and blocking them would block `chmod +x gate.sh` during setup. |
+| **`NotebookEdit` was in the matcher and invisible to the guard**, which only ever read `file_path`. | Both file guards fall back to `notebook_path`. |
+
+**Parity is now behavioural, and that is the change that matters.** Every defect
+above sat *around* the pattern lists, and the parity self-tests compared the
+lists as text — so they passed the entire time, certifying `the same 86 patterns`
+while one implementation truncated its input and the other did not.
+`tests/fixtures/guard-cases.tsv` is 79 payloads, and every one is executed against
+**both** implementations: each must return the expected code, and the two must
+agree with each other. Reintroducing the case-fold bug now fails four cases twice
+over — once for the wrong answer, once for the disagreement. The string
+comparisons are kept as a cheap early warning; they are no longer the only thing
+certifying parity.
+
+The `.ps1` side runs through `tests/run-guard-cases.ps1`, one process for the
+whole fixture. Spawning `pwsh` per case took the suite from seconds to minutes on
+Windows, and a self-test that slow stops being run — which would leave the `.ps1`
+hooks exactly as unexercised as they were before.
+
+### The overdue-exceptions check failed every PR, silently
+
+Shipped in this release and wrong in both directions. A `while` loop returns the
+status of the last command in its body, so when the last date scanned was *not*
+overdue the `&&` list returned 1 → the pipeline returned 1 → the command
+substitution returned 1 → GitHub's default `bash -e` killed the step before the
+`if` was ever evaluated. **One legitimate open exception with a future date
+failed every pull request with no output at all**, and a genuinely overdue row
+that was not the *last* row exited 1 without ever printing `OVERDUE:` or its
+remediation guidance. The predictable outcome of a step that fails silently and
+inexplicably is that someone deletes it, which would have made the mechanism
+worse than not shipping it.
+
+It is now one `awk` pass with no `set -e` hazard, and three parser bugs went with
+it:
+
+- **The deadline is found by its column header, not by position.** Anchoring to
+  the last cell silently disabled the check for every row the moment anyone
+  appended a *Status* column. Scanning every cell instead is worse, not better:
+  the first column of this table is the date the exception was *opened*, which is
+  in the past by definition. A table with no *Remediate by* header now fails
+  loudly rather than passing vacuously.
+- **`grep -v '~~'` closed rows it should not have.** It dropped a row if `~~`
+  appeared anywhere in it, so `~~cancelled~~ prod incident` in the *Why* cell
+  closed an exception that was still open. Only the first cell decides now.
+- **Deleting `docs/exceptions.md` passed.** The check began `[ -f "$f" ] || exit 0`,
+  so removing the file erased every open exception and its deadline. Deleting a
+  file that has ever existed now fails the build; the checkout takes
+  `fetch-depth: 0` so that test can actually see history rather than passing
+  vacuously.
+
+`docs/exceptions.md` is now in CODEOWNERS. Editing a remediation date is how an
+exception becomes permanent without anyone deciding that it should.
+
+### The fixes that reopened one layer down
+
+Three of the controls repaired earlier in this release were repaired *at the layer
+they were reported at* and stood open one layer below. This is the pattern worth
+naming, because it is not a coding mistake — it is what happens when a fix is
+written before the test that would have proved it.
+
+- **Quotes stopped defeating the parser and went on defeating the matcher.** The
+  extractor rewrite made `echo "hi" && npm install x` readable. The matcher
+  underneath it still treated `"` and `'` as ordinary word characters, so the
+  padded-glob match never fired on `sh -c "npm install evil"` or
+  `eval "pip install requests"` — the character before `npm` was a quote, not a
+  space. Shell metacharacters now normalise to whitespace before matching, in both
+  implementations. `>` and `<` are deliberately left alone; the perimeter block
+  reads them.
+- **A read earlier in the same command defeated the guards' own perimeter.** The
+  block inspected `${cmd%%"$path"*}` — everything before the **first** occurrence
+  of the path — so `ls .claude/settings.json && printf {} > .claude/settings.json`
+  moved the inspected window onto a prefix with no verb in it and was allowed. The
+  command is now split into simple commands at the shell separators first, and each
+  one is judged on its own.
+- **The perimeter verb list was a blocklist, and it missed the ordinary verbs.**
+  `sed -i`, `/bin/rm` (the old test required a literal space before `rm`),
+  `git checkout --`, `git clean -fd`, `perl -pi`, `python -c`, `xargs rm` and
+  `find -delete` all wrote to the hook directory unchallenged. It is now an
+  **allowlist**: if a perimeter path appears in a segment and its first word is not
+  a known read-only tool, the command is blocked. `cat`, `ls`, `grep`, `diff`,
+  `head`, `tail`, `stat`, `test`, `git diff`, `sh .claude/hooks/verify-guard.sh`
+  and `cp .claude/settings.json /tmp/backup` all still pass — that last one was
+  over-blocked before, and backing up the hook config is what `/framework-upgrade`
+  would do.
+
+### The JSON extractor: quadratic, unscoped, and open on three truncation shapes
+
+The string-aware extractor built earlier in this release walked the payload one
+character at a time and grew each string with `s = s c`. Appending to a string in
+awk copies it, so the cost was quadratic: **200KB took 0.5s, 800KB took 11.7s and
+1MB took 21.8s** — about 24× its own `.ps1` twin and 170× the `tr`+`sed` pipeline
+it replaced. The block comment claimed it was "indistinguishable at every realistic
+payload size" on the strength of the 200KB measurement, which is the one number a
+quadratic curve and a linear one agree on. A hook that exceeds Claude Code's
+timeout is a hook that is not enforcing, so a fix for a correctness bug had opened
+an availability path to the same outcome.
+
+It now does one `split()` on the quote character — a single pass in C — and walks
+segments. String bodies are skipped by index, never by character and never by
+concatenation, and `LC_ALL=C` keeps `substr` counting bytes rather than decoding
+the payload to wide characters on every call. Measured end to end on Git
+Bash/MSYS, `Write` payloads whose content precedes the path (the worst case — the
+whole string is scanned before the key is found):
+
+| Payload | Was | Now |
+|---|---|---|
+| 200 KB | 0.50s | 1.40s total, of which ~0.15s is the hook |
+| 800 KB | 11.7s | 1.49s total |
+| 2 MB | (extrapolates to ~90s) | 1.55s total |
+
+Roughly 1.4s of every figure in the *Now* column is MSYS spawning the process at
+all, which is why Windows is pointed at the `.ps1` twins and why the curve is
+flat rather than falling. Three other defects went with the rewrite:
+
+- **It is scoped to `tool_input`,** matching what the `.ps1` twin has always read.
+  Taking the first `command` key *anywhere* in the payload produced five verdict
+  divergences, and in four of them the `.sh` hook — the one macOS and Linux users
+  are pointed at — was the one that allowed.
+- **`\uXXXX` decodes** instead of becoming a space. `"npm install left-pad"`
+  used to be extracted as `" pm install left-pad"` and **exit 0** — the
+  "value printed successfully" contract — with a value that was not the payload's.
+  A code point that cannot be decoded exits 4 and blocks.
+- **All four truncation shapes fail closed.** Three of them returned "no such key"
+  (allow) while the `.ps1` rejected all four. Any unbalanced brace at the end of the
+  payload is now malformed, which is the same answer `ConvertFrom-Json` gives.
+
+`.cargo/config.toml` and `.bundle/config` were in the guarded-manifest list for
+three releases and could never fire: the list is matched against the **basename**,
+and theirs are `config.toml` and `config`. Patterns containing a `/` are now
+matched against the path. Those two files decide where every package in a project
+comes from, which is the case the list itself calls worse than a manifest edit.
+
+### The exceptions check, again — four more ways it passed silently
+
+Every defect this check has ever had made it **pass**, which is the only failure
+mode that cannot be found by reading it. It now has its own test suite
+(`tests/exceptions-check.sh`, 21 cases), extracted from the shipped `gate.yml` so
+the tests cannot drift from the code they cover.
+
+- **A column named *Remediation notes* disabled it.** The header was matched with
+  `h ~ /remediate|remediation|dueby/` and `next` fired on the first hit, so any
+  earlier column whose name contained the word won over the real deadline column.
+  `exceptions.md` explicitly invites adding and reordering columns — precisely the
+  edit that turned the check off, with no signal. The match is now exact, and two
+  deadline columns in one table are an error rather than a coin toss.
+- **The column index was bound once per file.** A short row, a second table with
+  different columns, and a header written below its own data rows all passed with a
+  genuinely overdue exception in the file. The column is re-bound per table, and a
+  row whose width does not match its header is now a failure — skipping it is how
+  an exception outlives its deadline with nobody noticing.
+- **Impossible dates were accepted.** Shape-checked by regex and compared as text,
+  so `2026-13-45` bought five months of silence and `9999-99-99` bought forever.
+  Month and day are range-checked now, leap years included.
+- **A prose-only file hard-failed.** Closing your last exception by removing the
+  rows produced `MALFORMED: … has no 'Remediate by' column` on every PR, and the
+  file could be neither emptied nor deleted. A file with no table now passes.
+
+### The pin did not name its subject
+
+`sha256sum -c` verifies the lines it is **given** and says nothing about the ones
+it is not, so a `.gate-sha256` naming `README.md` passed with `README.md: OK` and
+rc=0 while `gate.sh` sat unpinned. This mattered more, not less, once the install
+guard's perimeter block started *delegating* `gate.sh` protection to the pin on the
+stated grounds that it was "pinned by CI and owned in CODEOWNERS". The reasoning
+was sound; the pin it delegated to did not hold.
+
+The `Pin the gate` step now asserts that the pin **names** `gate.sh`,
+`check-stubs.sh` and `.gate-stubs-baseline` before verifying it. The stub ratchet
+is in there because `echo 9999 > .gate-stubs-baseline` turns it off and the script
+then prints `improved` and exits 0 — congratulating you for disabling it — and all
+three are in CODEOWNERS for the same reason.
+
+Also in CI, and absent until now: **`verify-guard` runs on every pull request.** A
+misconfigured `PreToolUse` hook fails open, and the only thing that says so was a
+script nothing ran on a clean checkout. It falls back to the POSIX twin of a
+configured `.ps1` command when PowerShell is not on the machine, and says so, so a
+Windows-configured project still gets the behavioural assertions in Linux CI.
+
+### The stub ratchet's two implementations returned different numbers
+
+`sh → 1`, `pwsh → 3`, same repository, same four files — while the self-test
+printed `PASS check-stubs.sh and .ps1 hunt the same 9 markers`, because it compared
+the marker **strings**, which were identical and always had been. The divergence
+lived beside them:
+
+- `Select-String` and `-notmatch` are case-**insensitive** by default, so
+  `// todo: later` counted on Windows and nowhere else. Both calls are now
+  case-sensitive.
+- The file filters disagreed. `check-stubs.sh` matched `*[Tt]est*` against the
+  whole path and `check-stubs.ps1` matched it against the filename, so
+  `src/latest/run.ts` was source on one platform only. Both now implement the same
+  rules, rule for rule, and the self-test feeds them the same 50-path fixture and
+  diffs the verdicts — plus the same tree, and the same file line by line.
+- **`approved-stub:` now needs a reason.** `// TODO: everything approved-stub:`
+  exempted the line while saying nothing at all. An escape hatch whose entire cost
+  is typing eleven characters is a delete key with extra steps.
+
 ### Smaller corrections
 
 - **The Node gate now ships `{{PLACEHOLDER}}`s** like the .NET gate, so
@@ -433,8 +655,13 @@ stop checking the others.
 | `process/core/exceptions.md` | **Install** — new, part of `core/`. Create `docs/exceptions.md` only when you first need one. |
 | `tooling/gate/gate-node.sh`, `.ps1` | **Merge** — now ships `{{PLACEHOLDER}}`s. Keep your commands; take the other hunks. |
 | `tooling/claude/hooks/guard-packages.sh`, `.ps1` | **Copy** |
+| `tooling/ci/gate.yml` | **Merge** — you uncommented a toolchain block. Take the `checkout` (`fetch-depth: 0`), `Pin the gate`, `No overdue exceptions` and `The package guards actually block` hunks; keep your toolchain. Then **regenerate `.gate-sha256`**: the pin step now requires it to name `gate.sh`, `check-stubs.sh` and `.gate-stubs-baseline`, and a pin that names only `gate.sh` fails with `UNPINNED`. |
+| `.gate-sha256` | **Regenerate** — `sha256sum gate.sh check-stubs.sh .gate-stubs-baseline > .gate-sha256` from each repo root. Add `gate.ps1` if your team runs the PowerShell gate. |
+| `.github/CODEOWNERS` | **Merge** — add `/check-stubs.sh`, `/check-stubs.ps1` and `/.gate-stubs-baseline`, and replace `/docs/stack-backend/` and `/docs/stack-frontend/` with `/docs/stacks/`. Those two lines have matched nothing since 2.3.0 renamed the stack folders, and GitHub ignores a CODEOWNERS path that matches no files **in silence** — so layer 2 has been unowned in every project that believed it was covered. |
+| `docs/exceptions.md` | **Check by hand, once.** The check is stricter in four ways and each one used to pass silently: the deadline header must be exactly *Remediate by* or *Due by* (a *Remediation notes* column no longer wins), every row must be as wide as its header, the date must be a real calendar date, and each table binds its own column. If you have an open exceptions table, re-read it against `docs/process/exceptions.md` before your next PR. |
 | `tooling/claude/hooks/verify-guard.sh`, `.ps1` | **Copy** — then re-run it; a project that installed only the file guard fails here, which is the point. |
-| `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. |
+| `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. Delete any `PowerShell(...)` allow entry: Claude Code has no PowerShell tool, so the entry matched nothing and the prompt it was meant to suppress appeared anyway. A `.ps1` gate is run through `Bash(pwsh -File ./gate.ps1 -Verify)`. |
+| `tooling/claude/framework-manifest.template.json` | **Merge** — you filled it in. Add the entry for the manifest itself, and the `{{FRONTEND_DIR}}` entries for `check-stubs.*`; without them the upgrade cannot resolve its own record, or the ratchet in a second repo. |
 | `CONTRIBUTING.md` | **None** — upstream only; adds the canonical-locations table. |
 | `process/*` | **Breaking — re-copy per bucket.** Layer 1 moved to `process/core|team|optional/` upstream. Installed layout is unchanged (flat `docs/process/`), so re-copy `core/` plus whichever of `team/`, `optional/*` your answers earn, and **delete the installed files you no longer earn**. |
 | `docs/stack-backend/`, `docs/stack-frontend/` | **Breaking — rename.** `git mv docs/stack-backend docs/stacks/<name>` per stack, keeping the upstream folder name, then update `CLAUDE.md` and the manifest's `stacks` map. |

@@ -23,6 +23,10 @@ echo "--- static consistency ------------------------------------------"
 sh tests/framework-checks.sh || code=1
 echo
 
+echo "--- CI exceptions check -----------------------------------------"
+sh tests/exceptions-check.sh || code=1
+echo
+
 echo "--- gate receipt contract ---------------------------------------"
 sh tests/receipt-contract.sh || code=1
 echo

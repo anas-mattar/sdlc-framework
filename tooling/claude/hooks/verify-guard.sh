@@ -56,6 +56,38 @@ fi
 TAB=$(printf '\t')
 fail=0
 
+# The WIRING is checked as configured; the BEHAVIOUR needs a command this machine
+# can actually run. settings.json ships the PowerShell commands, because that is
+# the platform where the POSIX form fails open -- so on Linux (which is where CI
+# runs this) the configured command is `powershell -NoProfile -File ...ps1` and
+# there is no powershell. Running it would report GUARD: BROKEN on a guard that is
+# fine, and a verifier that cries wolf is one people stop running.
+#
+# So: if the configured command's interpreter is not on this machine, fall back to
+# the sibling .sh hook and SAY SO. That keeps the behavioural assertions running in
+# CI. It does not weaken anything -- the matcher and the presence of both hooks are
+# still checked against what is really configured, and a configured command that
+# names a hook script which does not exist still fails.
+runnable_or_twin() {  # runnable_or_twin <configured command>, sets RUN_CMD
+    RUN_CMD="$1"
+    interp=${1%% *}
+    command -v "$interp" >/dev/null 2>&1 && return 0
+    case "$RUN_CMD" in
+        *.ps1*)
+            twin=${RUN_CMD##* }          # the script path is the last word
+            twin=${twin%.ps1}.sh
+            if [ -f "$twin" ] && command -v sh >/dev/null 2>&1; then
+                echo "  NOTE  '$interp' is not on this machine; testing $twin instead."
+                echo "        The wiring above is what is really configured."
+                RUN_CMD="sh $twin"
+                return 0
+            fi ;;
+    esac
+    echo "  FAIL  the configured command cannot run here and has no runnable POSIX twin: $RUN_CMD"
+    fail=1
+    return 1
+}
+
 # Find the command wired to a matcher that covers a given tool name. Sets a
 # variable rather than echoing into a command substitution, and reads via a
 # here-doc rather than a pipe: both keep this in the current shell. `$(f)` around
@@ -105,6 +137,7 @@ else
         echo "  FAIL  the matcher covers Edit but not Write — an agent can create a manifest."
         fail=1
     fi
+    runnable_or_twin "$file_cmd" && file_cmd="$RUN_CMD"
 
     echo "guarded paths must be BLOCKED (exit 2):"
     file_case "$file_cmd" "package.json"             "package.json"              2
@@ -152,6 +185,7 @@ if [ -z "$inst_cmd" ]; then
     fail=1
 else
     echo "install guard: $inst_cmd"
+    runnable_or_twin "$inst_cmd" && inst_cmd="$RUN_CMD"
     echo "install commands must be BLOCKED (exit 2):"
     cmd_case "$inst_cmd" "npm install"        "npm install left-pad"       2
     cmd_case "$inst_cmd" "yarn add"           "yarn add zod"               2

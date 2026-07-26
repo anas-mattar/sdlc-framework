@@ -1,0 +1,71 @@
+# Paths fed to BOTH check-stubs implementations' --classify/-Classify mode. The
+# two must agree on every line; tests/framework-checks.sh diffs the answers.
+#
+# One path per line. Blank lines and lines starting with `#` are ignored. The
+# files do not have to exist -- classification is a decision about the PATH.
+#
+# WHY THIS FILE EXISTS. The two implementations were compared by diffing their
+# marker regexes, which are identical and always were. The disagreement lived in
+# the file filter next to them: the .sh matched `*[Tt]est*` against the whole path
+# and the .ps1 matched it against the filename only, so anything under a directory
+# with `test` inside its name counted on one platform and not the other. Two
+# implementations of one ratchet that return different numbers means the number
+# means nothing, and the one CI reads is not the one the developer saw.
+#
+# Add the path that disagreed here BEFORE fixing the disagreement.
+
+# --- ordinary source: counted --------------------------------------------
+src/app.ts
+src/Api/Program.cs
+main.go
+lib/util.rb
+Makefile
+src/latest/run.ts
+src/testify-helpers/README.rs
+build-tools/gen.py
+
+# --- the checker itself: never counted ------------------------------------
+check-stubs.sh
+check-stubs.ps1
+tooling/gate/check-stubs.sh
+tooling/gate/check-stubs.ps1
+
+# --- prose and data: never counted ----------------------------------------
+README.md
+README.MD
+notes.txt
+package.json
+config.yml
+config.YAML
+data.csv
+logo.svg
+yarn.lock
+go.sum
+docs/process/definition-of-done.md
+docs/anything.ts
+specs/feature/001-thing/spec.md
+specs/notes.ts
+
+# --- vendored and generated trees: never counted --------------------------
+node_modules/left-pad/index.js
+app/node_modules/x/y.js
+vendor/gem/lib.rb
+src/vendor/thing.c
+dist/bundle.js
+app/dist/main.js
+build/out.o
+app/build/gen.cs
+static/app.min.js
+
+# --- tests: never counted -------------------------------------------------
+tests/run.sh
+test/run.sh
+src/tests/helper.ts
+src/Tests/Helper.cs
+src/__tests__/thing.js
+app.test.ts
+Widget.Tests.cs
+thing.spec.ts
+Thing.Spec.cs
+src/spec/support.rb
+src/specs/support.rb

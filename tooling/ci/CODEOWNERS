@@ -19,11 +19,24 @@
 # {{OWNER}} — e.g. @your-handle, or @your-org/your-team
 # {{REVIEWER}} — someone who is not the usual author of the code, where one exists.
 
+# NOTE ON PATHS. GitHub silently ignores a CODEOWNERS line that matches no file.
+# A stale path is therefore indistinguishable from a protected one in the UI, and
+# the only way to tell is to open a PR touching the file and see whether a review
+# is demanded. Check these against the layout after every /framework-upgrade.
+
 # --- the gate's own definition ---------------------------------------------
-# Change either of these and the meaning of "the gate passed" changes.
+# Change any of these and the meaning of "the gate passed" changes.
 /gate.sh                    {{OWNER}} {{REVIEWER}}
 /gate.ps1                   {{OWNER}} {{REVIEWER}}
 /.gate-sha256               {{OWNER}} {{REVIEWER}}
+
+# The stub ratchet is part of the gate: `echo 9999 > .gate-stubs-baseline` turns
+# it off, and the script then reports "improved" and exits 0. It is pinned in
+# .gate-sha256 as well -- see the `Pin the gate` step, which asserts that the pin
+# NAMES these files rather than merely verifying whatever lines it contains.
+/check-stubs.sh             {{OWNER}} {{REVIEWER}}
+/check-stubs.ps1            {{OWNER}} {{REVIEWER}}
+/.gate-stubs-baseline       {{OWNER}} {{REVIEWER}}
 
 # --- whether the gate runs at all ------------------------------------------
 # For same-repo pull_request events GitHub runs the workflow definition from the
@@ -38,10 +51,21 @@
 /.claude/settings.local.json {{OWNER}} {{REVIEWER}}
 /.claude/hooks/             {{OWNER}} {{REVIEWER}}
 
+# --- what the gate is allowed to let through --------------------------------
+# An exception is a documented, dated, authorised hole in the process. Editing a
+# remediation date is how an exception becomes permanent without anyone deciding
+# that it should, and CI can only check the dates it is given.
+/docs/exceptions.md         {{OWNER}} {{REVIEWER}}
+
 # --- the rules themselves ---------------------------------------------------
 # Layer 1 and 2 docs are upstream-owned: a project edits them only by porting the
 # change upstream first (`CONTRIBUTING.md`). Listing them here is what makes that
 # rule visible at the moment someone tries.
+#
+# `/docs/stacks/` is one line covering every stack this project installed. It
+# replaced `/docs/stack-backend/` and `/docs/stack-frontend/`, which were the
+# two fixed slots the layout abolished in v2.3.0 -- so for two releases those
+# lines matched nothing, were ignored in silence, and layer 2 was unowned in
+# every project that believed it was covered.
 /docs/process/              {{OWNER}}
-/docs/stack-backend/        {{OWNER}}
-/docs/stack-frontend/       {{OWNER}}
+/docs/stacks/               {{OWNER}}

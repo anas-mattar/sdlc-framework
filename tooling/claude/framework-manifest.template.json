@@ -17,7 +17,11 @@
     "",
     "KEEP IT CURRENT. It is written at install and updated by /framework-upgrade. If you add a stack, add a",
     "repo, or install an optional module later, add its entries here at the same time -- an entry that is",
-    "missing is a file the upgrade will not see."
+    "missing is a file the upgrade will not see.",
+    "",
+    "The list NAMES ITSELF, on purpose. Without that entry the one file the upgrade reads to decide what it",
+    "may touch was the one file it could never resolve, so a change to the manifest's own shape -- a new",
+    "field, a renamed class -- was invisible to the mechanism that exists to surface changes."
   ],
 
   "framework_version": "{{FRAMEWORK_VERSION}}",
@@ -76,8 +80,11 @@
     { "upstream": "tooling/gate/gate-{{FRONTEND_STACK_FAMILY}}.ps1", "installed": "{{FRONTEND_DIR}}/gate.ps1", "class": "merge" },
     { "upstream": "tooling/gate/check-stubs.sh", "installed": "{{BACKEND_DIR}}/check-stubs.sh", "class": "copy" },
     { "upstream": "tooling/gate/check-stubs.ps1", "installed": "{{BACKEND_DIR}}/check-stubs.ps1", "class": "copy" },
+    { "upstream": "tooling/gate/check-stubs.sh", "installed": "{{FRONTEND_DIR}}/check-stubs.sh", "class": "copy" },
+    { "upstream": "tooling/gate/check-stubs.ps1", "installed": "{{FRONTEND_DIR}}/check-stubs.ps1", "class": "copy" },
     { "upstream": "tooling/ci/gate.yml", "installed": ".github/workflows/gate.yml", "class": "merge" },
     { "upstream": "tooling/ci/CODEOWNERS", "installed": ".github/CODEOWNERS", "class": "merge" },
+    { "upstream": "tooling/claude/framework-manifest.template.json", "installed": ".claude/framework-manifest.json", "class": "local" },
     { "upstream": "CLAUDE.md.template", "installed": "CLAUDE.md", "class": "local" }
   ],
 

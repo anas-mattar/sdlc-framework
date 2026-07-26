@@ -1,7 +1,17 @@
 # Stub ratchet -- refuses to let unimplemented code grow.
 #
-#     ./check-stubs.ps1             check against the baseline
-#     ./check-stubs.ps1 -Baseline   write the current count as the new baseline
+#     ./check-stubs.ps1              check against the baseline
+#     ./check-stubs.ps1 -Baseline    write the current count as the new baseline
+#     ./check-stubs.ps1 -Count       print the count and nothing else
+#     ./check-stubs.ps1 -Classify a,b  print `source`/`skip` per path
+#
+# The last two exist so tests/framework-checks.sh can compare this script's answers
+# against check-stubs.sh's on the same inputs. The two implementations used to be
+# compared by diffing their MARKER STRINGS, which passed while they returned
+# different counts on the same tree: Select-String and -notmatch are
+# case-INSENSITIVE by default, so `// todo: later` counted here and not on macOS,
+# and the two file filters disagreed about any path with `test` in a directory
+# name. A rule implemented twice needs its ANSWERS compared, not its constants.
 #
 # WHY THIS EXISTS. Nothing else in the framework requires the implementation to be
 # REAL. The word "coverage" appears nowhere as a requirement, and the two review
@@ -24,33 +34,50 @@
 # Keep this file ASCII-only. Windows PowerShell 5.1 reads UTF-8-without-BOM as ANSI,
 # so a stray em dash becomes three bytes -- one of which is a quote -- and the script
 # dies with "string is missing the terminator". Use `--`, never an em dash.
-param([switch]$Baseline)
+param([switch]$Baseline, [switch]$Count, [string[]]$Classify, [string[]]$Scan)
 
 $BaselineFile = ".gate-stubs-baseline"
 
-# Markers that mean "not implemented". `approved-stub:` on the same line exempts it,
-# so a deliberate, reviewed placeholder is declared rather than hidden -- write
-# `// approved-stub: spec.md section 4.2, deferred to phase 3` and it stops counting.
+# Markers that mean "not implemented". `approved-stub: <reason>` on the same line
+# exempts it, so a deliberate, reviewed placeholder is declared rather than hidden.
 $Markers = 'TODO|FIXME|HACK|XXX|NotImplementedException|NotImplementedError|UnimplementedError|unimplemented!|todo!\(\)'
+
+# The exemption needs a REASON after the colon. `// TODO: everything
+# approved-stub:` was accepted for three releases and exempted the line while
+# saying nothing at all -- an escape hatch whose entire cost was typing eleven
+# characters is not an escape hatch, it is a delete key with extra steps.
+$Exempt = 'approved-stub:\s*\S'
 
 # Source files only. Tests are excluded because a TODO in a test is a note about a
 # test, not shipped behaviour; docs and specs are excluded because prose about
 # future work is the point of a roadmap. Vendored and generated trees are not ours.
+#
+# Every rule below is duplicated, EXACTLY, in check-stubs.sh's is_source, and
+# tests/framework-checks.sh feeds both the same path list and diffs the answers.
+# The previous pair did not agree: the .sh matched `*[Tt]est*` against the WHOLE
+# path and this one matched it against the filename only, so `src/latest/run.ts`
+# was source here and not there.
+#
+# The case-sensitivity of each rule is deliberate and matched to the .sh:
+# extensions are case-INSENSITIVE (`-match`), everything else is case-SENSITIVE
+# (`-cmatch`, `-clike`, `-ceq`, and .NET's ordinal `.Contains`).
 function Test-IsSource([string]$Path) {
-    $p = $Path -replace '\\', '/'
+    $p = ($Path -replace '\\', '/').TrimEnd('/')
+    $b = $p.Substring($p.LastIndexOf('/') + 1)
     # The checker itself names every marker it hunts for, in its own regex and its
     # own comments. Left in, it would count several of its own lines on a clean
     # repo -- a number nobody can explain and everybody learns to ignore.
-    if ($p -match '(^|/)check-stubs\.(sh|ps1)$') { return $false }
-    foreach ($x in @('node_modules/', '/vendor/', '/dist/', '/build/')) {
-        if ($p -like "*$x*") { return $false }
+    if ($b -ceq 'check-stubs.sh' -or $b -ceq 'check-stubs.ps1') { return $false }
+    if ($b -match '\.(md|txt|json|yml|yaml|csv|svg|lock|sum)$') { return $false }
+    if ($b -clike '*.min.js') { return $false }
+    if ($b -cmatch '[Tt]est') { return $false }
+    if ($b -cmatch '[Ss]pec\.') { return $false }
+    $segments = '/' + $p
+    foreach ($d in @('node_modules', 'vendor', 'dist', 'build',
+                     'test', 'tests', 'Test', 'Tests', '__tests__', 'spec', 'specs')) {
+        if ($segments.Contains("/$d/")) { return $false }
     }
-    if ($p -like 'vendor/*' -or $p -like 'dist/*' -or $p -like 'build/*') { return $false }
-    if ($p -like 'docs/*' -or $p -like 'specs/*') { return $false }
-    if ($p -match '\.(md|txt|json|yml|yaml|csv|svg|lock|sum)$') { return $false }
-    if ($p -like '*.min.js') { return $false }
-    if ($p -match '(^|/)[^/]*[Tt]est[^/]*$' -or $p -match '\.spec\.' -or $p -match '_test\.') { return $false }
-    if ($p -match '(^|/)(tests?|__tests__|Tests)/') { return $false }
+    if ($p -clike 'docs/*' -or $p -clike 'specs/*') { return $false }
     return $true
 }
 
@@ -62,19 +89,56 @@ function Get-StubLines {
     foreach ($f in $files) {
         if (-not (Test-IsSource $f)) { continue }
         if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { continue }
-        $m = Select-String -LiteralPath $f -Pattern $Markers -ErrorAction SilentlyContinue |
-             Where-Object { $_.Line -notmatch 'approved-stub:' }
+        # -CaseSensitive and -cnotmatch, both deliberately: without them `// todo:`
+        # counted here and not in check-stubs.sh, and a line reading
+        # `Approved-Stub:` exempted itself here alone.
+        $m = Select-String -LiteralPath $f -Pattern $Markers -CaseSensitive -ErrorAction SilentlyContinue |
+             Where-Object { $_.Line -cnotmatch $Exempt }
         if ($m) { $hits += $m }
     }
     return $hits
 }
 
+# --- test-support modes -----------------------------------------------------
+if ($Classify) {
+    # Split on commas as well as taking multiple values. `pwsh -File script.ps1
+    # -Classify a,b,c` hands the whole thing over as ONE string -- -File does not
+    # split an array argument -- so a caller that joined the list got one verdict
+    # for one enormous "path" and the parity diff was a wall of noise rather than
+    # a disagreement.
+    $paths = @()
+    foreach ($c in $Classify) { $paths += ($c -split ',' | Where-Object { $_ -ne '' }) }
+    foreach ($p in $paths) {
+        if (Test-IsSource $p) { Write-Host "source $p" } else { Write-Host "skip $p" }
+    }
+    exit 0
+}
+
+# Which LINES of a given file count, ignoring Test-IsSource. The marker regex and
+# the exemption are the other half of the rule, and the tree this script normally
+# walks does not happen to contain a lower-case `todo:` or an unjustified
+# `approved-stub:` -- so a count over the real repo cannot see either.
+if ($Scan) {
+    foreach ($p in $Scan) {
+        Select-String -LiteralPath $p -Pattern $Markers -CaseSensitive -ErrorAction SilentlyContinue |
+            Where-Object { $_.Line -cnotmatch $Exempt } |
+            ForEach-Object { Write-Host ("{0}:{1}:{2}" -f $p, $_.LineNumber, $_.Line) }
+    }
+    exit 0
+}
+
 $hits = @(Get-StubLines)
 $current = $hits.Count
+
+if ($Count) {
+    Write-Host $current
+    exit 0
+}
 
 if ($Baseline) {
     Set-Content -LiteralPath $BaselineFile -Value $current -NoNewline
     Write-Host "STUBS: baseline set to $current -- commit $BaselineFile."
+    Write-Host "  Pin it too, in the same commit:  sha256sum gate.sh check-stubs.sh $BaselineFile > .gate-sha256"
     exit 0
 }
 
@@ -100,7 +164,8 @@ if ($current -gt $baselineCount) {
     Write-Host "STUBS: unimplemented markers rose to $current (baseline $baselineCount)."
     Write-Host "  This phase added code that says it is not finished. Implement it, or"
     Write-Host "  mark the line 'approved-stub: <where the spec defers it>' so the"
-    Write-Host "  deferral is reviewable rather than invisible."
+    Write-Host "  deferral is reviewable rather than invisible. The reason is required:"
+    Write-Host "  a bare 'approved-stub:' with nothing after it does not exempt anything."
     Write-Host ""
     foreach ($h in $hits) {
         Write-Host ("  {0}:{1}:{2}" -f $h.Path, $h.LineNumber, $h.Line.Trim())

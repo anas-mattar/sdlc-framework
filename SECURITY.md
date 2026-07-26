@@ -37,10 +37,33 @@ In scope:
 - A gate script, hook, or CI workflow that can be made to execute attacker-supplied
   content — for example a repository file name or branch name reaching a shell.
 - The **package guard failing open**: any way to make
-  `.claude/hooks/guard-packages.*` permit an unapproved dependency change while
-  appearing to be active. Claude Code treats an unrunnable hook as an error rather
-  than a block, so anything that silently breaks the hook is a real bypass. This is
-  why `verify-guard.*` exists and why `/framework-doctor` checks it.
+  `.claude/hooks/guard-packages.*` or `.claude/hooks/guard-installs.*` permit an
+  unapproved dependency change while appearing to be active. Claude Code treats an
+  unrunnable hook as an error rather than a block, so anything that silently breaks
+  a hook is a real bypass. This is why `verify-guard.*` exists, why CI runs it, and
+  why `/framework-doctor` checks it. Both hooks are in scope: the file guard sees
+  `Edit`/`Write` against manifests, the install guard sees the `Bash` commands
+  (`npm i`, `dotnet add package`, `pip install`, `go get`) that rewrite the same
+  files without an editor ever touching them.
+- The **guards' own perimeter opening**: a way to write `.claude/settings.json`,
+  `.claude/hooks/` or `.claude/allow-package-changes` from a tool call, which
+  disables the guards for good in a single step. Both guards block writes to those
+  paths; a command that gets a write past that block is a report worth making.
+- **A control that can be weakened without the change being visible.** The
+  framework's answer to "everything the gate rests on lives inside the perimeter
+  the checked party controls" is not prevention — nothing in-repo can prevent it —
+  it is that a weakening must be *impossible to land silently*. Three mechanisms
+  carry that, and a defect in any of them is in scope:
+  `.gate-sha256` (pins `gate.sh`, `check-stubs.sh` and `.gate-stubs-baseline`, and
+  the CI step asserts the pin names them rather than verifying whatever list it
+  happens to contain), `CODEOWNERS` (makes editing those files, the workflow, the
+  hook configuration and `docs/exceptions.md` require a named human), and the
+  `check-stubs` ratchet (stops unimplemented code from growing).
+- **The exception mechanism becoming permanent silently**: any way for a row in
+  `docs/exceptions.md` to outlive its *Remediate by* date without CI failing — a
+  header the check does not bind to, a row it skips, a date it accepts that is not
+  a date. Every past defect in that check made it pass rather than fail, which is
+  the property that makes this class worth reporting.
 - The **gate receipt failing open**: any way to make `--verify` report
   `RECEIPT: valid` for a tree the gate did not actually pass — a stale receipt
   accepted as fresh, an unfingerprintable tree treated as a match, a step whose
@@ -70,10 +93,20 @@ Out of scope:
 
 ## A note on trust
 
-The receipt mechanism and the package guard defend against **mistakes and
+The receipt mechanism and the package guards defend against **mistakes and
 overconfident automation** — an AI claiming a build passed, a dependency added
 without approval. They are not designed to withstand a developer with commit
 access who is deliberately trying to defeat them. Nothing that runs on the
-machine being checked can do that. CI on a clean checkout is the only check the
-checked party does not control, which is why the framework requires it even on
-solo projects.
+machine being checked can do that.
+
+CI on a clean checkout is the only check the checked party does not **execute**,
+which is why the framework requires it even on solo projects. It is not the only
+one they do not **control**, and saying so was misleading: CI runs `gate.sh`,
+`check-stubs.sh` and the workflow file itself from the pull request's own head
+branch, all three of which the author can edit in the same PR as the work they
+would excuse. What closes that is not the execution environment but the
+*visibility* of the change — `.gate-sha256` turns a weakened gate into a one-line
+diff nobody can miss, and `CODEOWNERS` turns that diff into a named human's
+approval, out of band. Both are in `tooling/ci/`, both are installed by SETUP, and
+neither works unless branch protection is on and "Require review from Code Owners"
+is ticked. An unenforced check is decoration; that is the honest boundary.

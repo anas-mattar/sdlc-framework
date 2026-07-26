@@ -122,7 +122,9 @@ ran locally. There is no separate CI command chain to drift out of sync. Start f
   the gate actually run against *this* code" gap for the AI mid-phase; CI closes
   the "did it run at all" gap at merge. Neither replaces the other.
 - CI also runs the gate script **pinned by hash** (`.gate-sha256`), because CI runs
-  a script the party being checked can edit. See `tooling/ci/gate.yml`.
+  a script the party being checked can edit. The pin covers the gate script, the
+  stub ratchet and its baseline, and CI checks that the pin **names** them — a hash
+  file is only evidence about the lines it contains. See `tooling/ci/gate.yml`.
 
 **This is not a team rule, and it is least optional when you are alone.** A solo
 project has no peer review, so CI is its only mechanical enforcement — the local

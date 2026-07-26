@@ -145,7 +145,9 @@ inside the docs assume this layout:
 ├── .gate-result.json          # gate receipt — GITIGNORED, never committed
 ├── .github/workflows/gate.yml # from tooling/ci (per repo)
 ├── .github/CODEOWNERS         # from tooling/ci — who must approve the gate's own definition
-├── .gate-sha256               # pins gate.sh; CI refuses to run an unpinned gate
+├── .gate-sha256               # pins gate.sh, check-stubs.sh and the stub baseline;
+│                              #   CI refuses to run an unpinned gate, and checks
+│                              #   that the pin names them
 ├── .claude/                   # from tooling/claude (settings, hooks, commands)
 ├── docs/
 │   ├── process/               # ← process/
