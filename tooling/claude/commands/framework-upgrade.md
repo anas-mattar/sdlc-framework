@@ -19,26 +19,42 @@ Stop and report if any of these is true:
 - The path argument is missing or is not a git repo containing `VERSION` and
   `CHANGELOG.md`.
 
-## Step 2 — establish the version delta
+## Step 2 — read the install manifest, and establish the version delta
 
-- **Current:** read `Framework: sdlc-framework vX.Y.Z` from this project's
-  `CLAUDE.md`. If that line is missing, the install predates version stamping —
-  say so and ask the user which version they installed; do not guess.
+`.claude/framework-manifest.json` records what this project installed and where
+each file came from. Read it first: every later step depends on it.
+
+- **Missing manifest** — the install predates v2.3.0. Say so and offer to
+  reconstruct one from `tooling/claude/framework-manifest.template.json` by
+  inspecting the project (which `docs/stack-*/` exist, which repos have a
+  `gate.sh`, which optional modules are present). Get the user to confirm the
+  reconstruction *before* using it, and write it out as its own commit. Do not
+  proceed on a guessed manifest — a wrong `upstream` path silently upgrades a file
+  from the wrong source.
+- **Current version:** `framework_version` in the manifest, cross-checked against
+  the `Framework: sdlc-framework vX.Y.Z` line in `CLAUDE.md`. If the two disagree,
+  stop and report — one of them was updated by hand and you cannot tell which is
+  right.
 - **Available:** `cat <framework>/VERSION`.
 - Equal → report "already current" and stop.
 - Current is *newer* than upstream → the project diverged or the framework repo is
   stale. Report it; do not "upgrade" backwards.
+- **Tag preflight:** confirm `git -C <framework> rev-parse v<CURRENT>` resolves.
+  Step 3 diffs against that tag, and a missing tag makes every file look identical
+  to itself — the upgrade would report no drift at all and quietly overwrite real
+  local edits. If the tag is absent, stop: the framework repo needs
+  `git push --tags`, or the release was never tagged.
 
 ## Step 3 — detect local drift BEFORE proposing anything
 
-This is the step that earns the command. For every installed layer 1/2 file,
-compare the project's copy against the upstream file **as it was at the recorded
-version** — not against the new version, which would flag every legitimate change
-as drift:
+This is the step that earns the command. Walk **`files[]` from the manifest** — not
+a hardcoded list of directories. For each entry, compare the installed path against
+its `upstream` path **as it was at the recorded version**, not against the new
+version, which would flag every legitimate upstream change as local drift:
 
 ```sh
-git -C <framework> show v<CURRENT>:process/<file>.md > /tmp/upstream-orig.md
-diff --strip-trailing-cr /tmp/upstream-orig.md docs/process/<file>.md
+git -C <framework> show v<CURRENT>:<entry.upstream> > /tmp/upstream-orig
+diff --strip-trailing-cr /tmp/upstream-orig <entry.installed>
 ```
 
 **`--strip-trailing-cr` is not optional.** `git show` emits LF; a Windows working
@@ -46,20 +62,52 @@ copy has CRLF. Without it every single file reports as drifted and the check is
 worse than useless — it trains you to ignore it. (`git diff --no-index
 --ignore-cr-at-eol` works equally well if you prefer.)
 
-Cover `docs/process/`, `docs/stack-*/`, `docs/contracts/`, `.claude/commands/`,
-and `.claude/hooks/`. Any difference means someone edited a layer 1/2 file locally,
-which the upstream-first rule forbids (`README.md` → *Versioning & Upstream-First
-Rule*).
+Before the manifest existed this step covered `docs/process/` and `.claude/` and
+silently skipped everything else, because those were the only paths whose mapping
+was 1:1. Layer 2, the review templates, the gate scripts and CI — all renamed by
+the install, all where the editable content actually lives — went unchecked. If an
+entry's `upstream` path does not resolve at that tag, **report it rather than
+skipping it**: either the file is new since that version, or the manifest is wrong,
+and both need saying out loud.
 
-Report drift as its own section, per file. For each, the user chooses:
+What drift means depends on `class`:
 
-1. **Port it upstream first** — the correct answer if the edit is a genuine
-   improvement. Stop the upgrade, make the change in the framework repo, bump its
-   `VERSION`, then re-run.
-2. **Discard it** — the edit was project-specific and belongs in `docs/project/`
-   (layer 3). Move the content there, then let the upgrade overwrite.
+- **`copy`** — a layer 1/2 doc the project is not allowed to edit. Any difference
+  is a finding. The user chooses:
+  1. **Port it upstream first** — the correct answer if the edit is a genuine
+     improvement. Stop the upgrade, make the change in the framework repo, bump its
+     `VERSION`, then re-run.
+  2. **Discard it** — the edit was project-specific and belongs in `docs/project/`
+     (layer 3). Move the content there, then let the upgrade overwrite.
+  3. **Keep it in a preserved region** — see below. This is the right answer for
+     the handful of layer-1 docs that ship `{{PLACEHOLDER}}`s a project *must*
+     fill (`repository-strategy.md`, `branch-strategy.md`,
+     `deployment-standards.md`). Before this option existed the contract was
+     contradictory: fill them and the next upgrade reverts them, leave them and
+     layer 1 ships broken text.
+- **`merge`** — expected to differ; the project edited it at install. Do not report
+  it as drift. Quote the upstream change for the user to apply by hand.
+- **`local`** — generated from a template and owned by the project. Report upstream
+  template changes as informational; never touch the file.
 
 Never silently overwrite a drifted file.
+
+### Preserved regions
+
+A `copy`-class document may carry exactly one region that an upgrade must not
+overwrite:
+
+```markdown
+<!-- LOCAL: preserved by /framework-upgrade -->
+...project-specific content, including filled placeholders...
+<!-- /LOCAL -->
+```
+
+When replacing a `copy` file, extract this region from the installed copy and
+re-insert it into the new upstream version at the same marker. If the new upstream
+version has no markers, stop and ask — do not drop the content. Content outside the
+markers is replaced without asking, which is the point: the region is a narrow,
+declared exception to layer discipline, not a general licence to edit.
 
 ## Step 4 — walk the CHANGELOG
 
@@ -83,10 +131,14 @@ Call out any entry marked **Breaking** prominently, with its consequence.
 
 After the user approves:
 
-1. Perform the Copy/Install operations.
+1. Perform the Copy/Install operations, honouring preserved regions.
 2. Report the Merge and Action items again as remaining manual work — the upgrade
    is **not** complete until the user confirms them.
-3. Update the `Framework: sdlc-framework vX.Y.Z` line in `CLAUDE.md`.
+3. Update **both** version records: `framework_version` in
+   `.claude/framework-manifest.json` and the `Framework: sdlc-framework vX.Y.Z`
+   line in `CLAUDE.md`. Add `files[]` entries for anything newly installed, and
+   remove entries for anything the new version deleted — a manifest that is stale
+   is worse than none, because the next upgrade trusts it.
 4. Run `/framework-doctor` and report its output.
 5. Ask the user to run the full gate and confirm `RECEIPT: valid` before
    committing — an upgrade that breaks the build must not land.

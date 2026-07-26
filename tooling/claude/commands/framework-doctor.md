@@ -83,12 +83,30 @@ no `continue-on-error`. Report whether the check is required on `main` as
 **unverifiable locally** — the user must confirm it in branch protection. Applies
 to solo projects too (`SETUP.md` Q5).
 
-### 7. Installed layout
+### 7. Installed layout matches the manifest
 
-These exist: `docs/process/`, `docs/project/`, `specs/`, `.claude/commands/`,
-`.claude/hooks/`. Report `docs/stack-*/`, `docs/contracts/`, `docs/business/`,
-`docs/prototypes/`, `docs/roadmap/` as N/A when the project's tier or setup answers
-excluded them — absence is only a FAIL if something references them.
+Read `.claude/framework-manifest.json` and check every `files[]` entry's
+`installed` path actually exists. This is a real check rather than a guess: before
+the manifest existed this step could only assert that a fixed list of directories
+was present, and had no way to know which of the optional ones a given project was
+supposed to have — so absence was always ambiguous and always reported N/A.
+
+- **Manifest missing** — FAIL for any install stamped v2.3.0 or later; for an
+  older one, report that `/framework-upgrade` will offer to reconstruct it. Say
+  which, and do not treat a missing manifest as "nothing to check".
+- **Entry present in the manifest, path absent on disk** — FAIL, naming the file.
+  Something was deleted, or an upgrade was interrupted partway.
+- **Path present on disk, absent from the manifest** — report it. Usually a stack
+  or module installed later without recording it, which means every future upgrade
+  will skip that file silently.
+- **`stacks` values** — confirm each names a folder that exists in the framework
+  repo when the user supplied its path. A stack recorded as `nextjs-trpc` that
+  upstream no longer ships is an upgrade that will fail at Step 3.
+
+Cross-check `scope_tier` and `developers` against the matching lines in
+`CLAUDE.md`. They drive `process/project-rules.md`, `definition-of-done.md` and
+`/phase-done`, and if the two records disagree, the rules being applied depend on
+which file gets read first.
 
 ### 8. Layer discipline
 

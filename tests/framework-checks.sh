@@ -412,6 +412,62 @@ else
     layout_scan | sed 's/^/          /'
 fi
 
+# --- 7f. The install manifest template stays honest -------------------------
+# The manifest is what lets /framework-upgrade resolve an installed file back to
+# the upstream file it came from -- the install renames most of what it copies, so
+# without it the upgrade could only handle docs/process/, the one 1:1 mapping, and
+# silently skipped layer 2, the review templates, the gate scripts and CI.
+#
+# That only holds while every `upstream` path in the template actually exists here.
+# A template naming a moved or deleted file sends the upgrade looking for something
+# upstream does not have, which is precisely the silent skip it was written to end.
+echo "Install manifest"
+MANIFEST=tooling/claude/framework-manifest.template.json
+if [ ! -f "$MANIFEST" ]; then
+    bad "$MANIFEST is missing -- /framework-upgrade has nothing to resolve paths with"
+elif [ -n "$PY" ]; then
+    if $PY -c "import json; json.load(open('$MANIFEST'))" 2>/dev/null
+    then ok "framework-manifest.template.json is valid JSON"
+    else bad "framework-manifest.template.json is not valid JSON -- an install would copy a broken file"; fi
+
+    # Resolve each upstream path, substituting the stack placeholders with the
+    # stacks this repo actually ships. A path is satisfied if any substitution
+    # resolves: {{BACKEND_STACK}} is filled per project, not here.
+    man_bad=$($PY - "$MANIFEST" <<'PYEOF'
+import json, os, sys, glob
+entries = json.load(open(sys.argv[1]))["files"]
+stacks = [os.path.basename(p) for p in glob.glob("stacks/*") if os.path.isdir(p)]
+missing = []
+for e in entries:
+    up = e["upstream"]
+    cands = [up]
+    if "{{" in up:
+        cands = []
+        for s in stacks:
+            c = up
+            for ph in ("{{BACKEND_STACK}}", "{{FRONTEND_STACK}}"):
+                c = c.replace(ph, s)
+            # gate scripts are named by family (node/dotnet), not by stack folder
+            for ph in ("{{BACKEND_STACK_FAMILY}}", "{{FRONTEND_STACK_FAMILY}}"):
+                for fam in ("node", "dotnet"):
+                    cands.append(c.replace(ph, fam))
+            cands.append(c)
+    if not any(os.path.exists(c) for c in cands):
+        missing.append(up)
+for m in missing:
+    print(m)
+PYEOF
+)
+    if [ -z "$man_bad" ]; then
+        ok "every manifest upstream path exists ($($PY -c "import json;print(len(json.load(open('$MANIFEST'))['files']))" 2>/dev/null) entries)"
+    else
+        bad "manifest names upstream paths that do not exist:"
+        printf '%s\n' "$man_bad" | sed 's/^/          /'
+    fi
+else
+    meh "install manifest checks (no working python found)"
+fi
+
 # --- 8. No dependency on an unshipped constitution (ratchet) ----------------
 # Layers 1 and 2 used to cite constitution principles (I, X, XVI, XVII) as the
 # authority behind the Definition of Done and the review templates -- a document
@@ -474,6 +530,27 @@ else
     printf '%s\n' "$ps_inst" > "${TMPDIR:-/tmp}/gi-ps.$$"
     diff "${TMPDIR:-/tmp}/gi-sh.$$" "${TMPDIR:-/tmp}/gi-ps.$$" | sed 's/^/          /'
     rm -f "${TMPDIR:-/tmp}/gi-sh.$$" "${TMPDIR:-/tmp}/gi-ps.$$"
+fi
+
+# The stub ratchet is implemented twice, and the two must count the same thing. A
+# marker guarded on Windows but not on macOS is the worst kind of bug: it works for
+# whoever wrote it. (The per-line exemption semantics are not comparable
+# mechanically -- they are covered by the behavioural check that both report the
+# same count on the same tree.)
+sh_mark=$(grep -E "^MARKERS=" tooling/gate/check-stubs.sh | sed "s/^MARKERS='//; s/'$//" \
+    | tr '|' '\n' | grep -v '^$' | sort -u)
+ps_mark=$(grep -E "^\\\$Markers = " tooling/gate/check-stubs.ps1 | sed "s/^\\\$Markers = '//; s/'$//" \
+    | tr '|' '\n' | grep -v '^$' | sort -u)
+if [ -z "$sh_mark" ] || [ -z "$ps_mark" ]; then
+    bad "could not extract the stub-marker list from one or both check-stubs scripts"
+elif [ "$sh_mark" = "$ps_mark" ]; then
+    ok "check-stubs.sh and .ps1 hunt the same $(echo "$sh_mark" | wc -l | tr -d ' ') markers"
+else
+    bad "check-stubs.sh and .ps1 hunt different markers:"
+    printf '%s\n' "$sh_mark" > "${TMPDIR:-/tmp}/cs-sh.$$"
+    printf '%s\n' "$ps_mark" > "${TMPDIR:-/tmp}/cs-ps.$$"
+    diff "${TMPDIR:-/tmp}/cs-sh.$$" "${TMPDIR:-/tmp}/cs-ps.$$" | sed 's/^/          /'
+    rm -f "${TMPDIR:-/tmp}/cs-sh.$$" "${TMPDIR:-/tmp}/cs-ps.$$"
 fi
 
 if [ -z "$sh_pats" ] || [ -z "$ps_pats" ]; then

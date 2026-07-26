@@ -1,0 +1,78 @@
+{
+  "$comment": [
+    "Copy to <project>/.claude/framework-manifest.json at install and fill it in. SETUP.md step 7 walks this.",
+    "",
+    "WHY THIS FILE EXISTS. The install RENAMES most of what it copies: stacks/<name>/ becomes",
+    "docs/stack-backend/, modules/contracts/ becomes docs/contracts/, tooling/gate/gate-<stack>.sh becomes",
+    "gate.sh at each repo root, tooling/ci/gate.yml becomes .github/workflows/gate.yml. Nothing recorded those",
+    "renames, so /framework-upgrade could only resolve docs/process/ -- the one directory whose mapping is 1:1.",
+    "For everything else it had no way to know which upstream file an installed file came from, and the stack",
+    "identity was destroyed outright: once stacks/dotnet-api/ is called docs/stack-backend/, nothing on disk",
+    "says it was dotnet-api. The upgrade silently skipped layer 2, the review templates, the gate scripts and",
+    "CI -- which is where all the editable content lives.",
+    "",
+    "This file is the record. Every entry is one installed artifact and the upstream path it came from, so the",
+    "upgrade has a resolvable source for every target, /framework-doctor has a real layout check, and the",
+    "CHANGELOG's prose mapping table stops being load-bearing.",
+    "",
+    "KEEP IT CURRENT. It is written at install and updated by /framework-upgrade. If you add a stack, add a",
+    "repo, or install an optional module later, add its entries here at the same time -- an entry that is",
+    "missing is a file the upgrade will not see."
+  ],
+
+  "framework_version": "{{FRAMEWORK_VERSION}}",
+  "installed_utc": "{{INSTALL_DATE}}",
+
+  "$comment_answers": "The SETUP answers that decide which files are installed and which rules apply. /framework-doctor reads these; keep them identical to the matching lines in CLAUDE.md.",
+  "scope_tier": "{{SCOPE_TIER}}",
+  "developers": "{{TEAM_SIZE}}",
+
+  "$comment_stacks": "The upstream stacks/<name>/ folder behind each installed docs/stack-*/ directory. Without this the upgrade cannot tell which stack a project installed, because the install renamed the folder. Delete the slot a project does not use rather than leaving it blank.",
+  "stacks": {
+    "backend": "{{BACKEND_STACK}}",
+    "frontend": "{{FRONTEND_STACK}}"
+  },
+
+  "$comment_repos": "Repo-root-relative artifacts are installed once PER REPO. Single-repo projects list one entry with an empty path.",
+  "repos": [
+    { "name": "{{BACKEND_REPO_NAME}}", "path": "{{BACKEND_DIR}}" },
+    { "name": "{{FRONTEND_REPO_NAME}}", "path": "{{FRONTEND_DIR}}" }
+  ],
+
+  "$comment_class": [
+    "class matches the CHANGELOG's upgrade actions and decides what an upgrade may do without asking:",
+    "  copy    layer 1/2 doc. The project never edits it, so replace outright. Drift here is a finding.",
+    "  merge   the project edited this at install (gate commands, filled placeholders). NEVER overwrite;",
+    "          the upgrade quotes the upstream change for a human to apply.",
+    "  local   generated at install from a template and owned by the project from then on. The upgrade",
+    "          reports upstream changes but does not touch the file."
+  ],
+
+  "files": [
+    { "upstream": "process/", "installed": "docs/process/", "class": "copy" },
+    { "upstream": "process/templates/", "installed": "specs/_templates/", "class": "copy" },
+    { "upstream": "stacks/{{BACKEND_STACK}}/", "installed": "docs/stack-backend/", "class": "copy" },
+    { "upstream": "stacks/{{FRONTEND_STACK}}/", "installed": "docs/stack-frontend/", "class": "copy" },
+    { "upstream": "modules/contracts/", "installed": "docs/contracts/", "class": "copy" },
+    { "upstream": "tooling/claude/commands/", "installed": ".claude/commands/", "class": "copy" },
+    { "upstream": "tooling/claude/hooks/", "installed": ".claude/hooks/", "class": "copy" },
+    { "upstream": "tooling/claude/settings.json", "installed": ".claude/settings.json", "class": "merge" },
+    { "upstream": "tooling/project-docs/", "installed": "docs/project/", "class": "local" },
+    { "upstream": "tooling/gate/gate-{{BACKEND_STACK_FAMILY}}.sh", "installed": "{{BACKEND_DIR}}/gate.sh", "class": "merge" },
+    { "upstream": "tooling/gate/gate-{{BACKEND_STACK_FAMILY}}.ps1", "installed": "{{BACKEND_DIR}}/gate.ps1", "class": "merge" },
+    { "upstream": "tooling/gate/gate-{{FRONTEND_STACK_FAMILY}}.sh", "installed": "{{FRONTEND_DIR}}/gate.sh", "class": "merge" },
+    { "upstream": "tooling/gate/gate-{{FRONTEND_STACK_FAMILY}}.ps1", "installed": "{{FRONTEND_DIR}}/gate.ps1", "class": "merge" },
+    { "upstream": "tooling/gate/check-stubs.sh", "installed": "{{BACKEND_DIR}}/check-stubs.sh", "class": "copy" },
+    { "upstream": "tooling/gate/check-stubs.ps1", "installed": "{{BACKEND_DIR}}/check-stubs.ps1", "class": "copy" },
+    { "upstream": "tooling/ci/gate.yml", "installed": ".github/workflows/gate.yml", "class": "merge" },
+    { "upstream": "tooling/ci/CODEOWNERS", "installed": ".github/CODEOWNERS", "class": "merge" },
+    { "upstream": "CLAUDE.md.template", "installed": "CLAUDE.md", "class": "local" }
+  ],
+
+  "$comment_omitted": [
+    "Delete every entry above that this project did not install -- an optional module it skipped, a second",
+    "stack it does not have, the .ps1 gates on a POSIX-only team. A manifest that claims files which are not",
+    "there makes /framework-doctor report phantom problems, and a check that reports phantom problems is one",
+    "people learn to ignore."
+  ]
+}

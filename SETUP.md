@@ -119,6 +119,14 @@ unfilled tier line means every rule falls back to the strictest reading.
      receipt so `/phase-done` can prove a *fresh, full, green* run against the
      current working tree (`docs/process/gate-command.md`); it is local evidence
      and must never be committed.
+   - Copy `tooling/gate/check-stubs.sh` (and `.ps1`) to each repo root, run
+     `sh check-stubs.sh --baseline`, and commit `.gate-stubs-baseline`. This is
+     the only mechanism in the framework that requires the implementation to be
+     *real* — everything else is satisfied by code that persists a value and
+     leaves the interesting block empty behind a `TODO`. It is a ratchet, not a
+     threshold: an existing repo baselines wherever it is today, and the rule is
+     only that the number may not rise. Mark a deliberate placeholder with
+     `approved-stub: <where the spec defers it>` so the deferral is reviewable.
    - Copy `tooling/claude/` content into `<project>/.claude/` (settings, hooks,
      and the `/claim-feature`, `/phase-review`, `/phase-done`,
      `/framework-doctor`, `/framework-upgrade` commands). Review the permissions
@@ -158,16 +166,29 @@ unfilled tier line means every rule falls back to the strictest reading.
      delete sections your tier/answers exclude, and stamp the framework version
      from `VERSION`. `examples/minimal-node/CLAUDE.md` is a finished one to
      compare against.
-7. **Spec scaffold:**
+7. **Record what you installed:**
+   - Copy `tooling/claude/framework-manifest.template.json` →
+     `<project>/.claude/framework-manifest.json`, fill the placeholders, and
+     **delete every `files[]` entry this project did not install** — a second
+     stack it does not have, an optional module it skipped, the `.ps1` gates on a
+     POSIX-only team.
+   - This is the one record of where each installed file came from. The install
+     *renames* most of what it copies (`stacks/nextjs-trpc/` → `docs/stack-frontend/`,
+     `tooling/gate/gate-node.sh` → `gate.sh`), and without this file
+     `/framework-upgrade` cannot resolve those paths back upstream — it silently
+     skips layer 2, the review templates, the gate scripts and CI, which is where
+     all the editable content lives. Five minutes here is what makes the project
+     upgradable at all.
+8. **Spec scaffold:**
    - If using GitHub Spec Kit, run `specify init` and adopt its
      `specs/feature/NNN-<name>/` layout; copy `process/templates/` review checklists into
      `specs/_templates/`. Otherwise create `specs/` manually with the same shape.
-8. **Verify the install:**
+9. **Verify the install:**
    - Run `/framework-doctor`. It checks the things that fail silently: unfilled
      `{{…}}` placeholders, a gate script that never runs, a package guard that
      does not block, a receipt that is not gitignored. Fix every FAIL before
      feature work — an install that half-works is the worst state to build on.
-9. **Baseline commit:**
+10. **Baseline commit:**
    - Commit everything as `chore: adopt sdlc-framework vX.Y.Z` before starting
      feature work, so the first `git diff --stat` against a feature is clean.
 

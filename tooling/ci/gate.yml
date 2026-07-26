@@ -111,6 +111,22 @@ jobs:
       #   run: dotnet restore
       # -----------------------------------------------------------------------
 
+      # Nothing else in the framework requires the implementation to be REAL. A
+      # phase can persist a value, leave the block holding the feature's core
+      # invariant empty behind a TODO, write tests that assert a status code and
+      # the presence of a field, pass the build, earn a GENUINE valid receipt, tick
+      # every review box, and reach "Done pending human review".
+      #
+      # A ratchet rather than a threshold: brownfield repos legitimately start with
+      # hundreds of markers, and demanding zero would be ignored within a week.
+      # What it forbids is the number going up. `approved-stub: <where the spec
+      # defers it>` on the line exempts a deliberate placeholder, so a deferral is
+      # declared and reviewable instead of invisible.
+      - name: Stub ratchet
+        run: |
+          chmod +x ./check-stubs.sh
+          ./check-stubs.sh
+
       - name: Run the gate
         run: |
           chmod +x ./gate.sh

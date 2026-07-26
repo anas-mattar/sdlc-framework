@@ -74,7 +74,20 @@ Notes:
 
 ## 6. Tests
 
-- [ ] Tests accompany the behavior introduced in this phase.
+- [ ] **For each acceptance criterion this phase touches, name the test that would
+      fail if it regressed.** Fill the table below. A criterion with no such test
+      is a FAIL, not a note. "Tests accompany the behavior" was the old wording and
+      it is a *co-location* predicate — a test file next to the code satisfies it,
+      including one whose only assertion is that the code ran. This asks for a
+      mapping a reviewer can spot-check in ten seconds.
+
+      | Acceptance criterion (from `spec.md`) | Test that fails if it regresses |
+      |---|---|
+      | | |
+
+- [ ] The stub ratchet passes (`./check-stubs.sh`). Any `TODO`, `FIXME` or
+      `NotImplementedException` this phase added is either implemented or carries
+      `approved-stub: <where the spec defers it>`.
 - [ ] Backend: project test framework with isolated per-test database/fixtures; each
       test class documents the business rule under test.
 - [ ] Frontend: unit tests; e2e tests where the phase adds user flows.

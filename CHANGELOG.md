@@ -51,7 +51,7 @@ file guard never saw, so a project could run reporting `GUARD: verified` with
 every real install path open. `guard-installs.sh` / `.ps1` closes it: 46 command
 forms, the same approval marker, the same exit codes.
 
-### Self-tests: 34 assertions -> 58
+### Self-tests: 34 assertions -> 61
 
 The suite passed while examining almost nothing. Each of these is a check that
 now tests what the README already claimed it tested:
@@ -136,6 +136,84 @@ say where the time actually goes — reading enough to answer Q2 and Q6, filling
 minutes in concludes the framework is broken rather than that the estimate was
 optimistic, and reads every later instruction with less trust.
 
+### The install manifest — `/framework-upgrade` can finally resolve its own targets
+
+The install **renames** most of what it copies: `stacks/<name>/` becomes
+`docs/stack-backend/`, `modules/contracts/` becomes `docs/contracts/`,
+`tooling/gate/gate-<stack>.sh` becomes `gate.sh` at each repo root,
+`tooling/ci/gate.yml` becomes `.github/workflows/gate.yml`. Nothing recorded those
+renames, so drift detection — the step the command calls *the step that earns the
+command* — could only handle `docs/process/`, the one 1:1 mapping. It silently
+skipped layer 2, the review templates, the gate scripts and CI, which is where all
+the editable content lives. The stack identity was destroyed outright: once
+`stacks/dotnet-api/` is called `docs/stack-backend/`, nothing on disk says it was
+`dotnet-api`.
+
+`.claude/framework-manifest.json` (from `tooling/claude/framework-manifest.template.json`,
+written at SETUP step 7) records every installed artifact, the upstream path it came
+from, and a class:
+
+| class | an upgrade may |
+|---|---|
+| `copy` | replace outright; any local difference is a finding |
+| `merge` | never overwrite — quote the upstream change for a human to apply |
+| `local` | report template changes, never touch the file |
+
+`/framework-upgrade` Step 3 now walks `files[]` instead of a hardcoded directory
+list, and refuses to proceed when the recorded version's git tag does not resolve —
+diffing against a missing tag reports *no drift at all*, so the upgrade would have
+quietly overwritten real local edits. `/framework-doctor` check 7 became a real
+layout check instead of asserting a fixed directory list and reporting every
+optional path as N/A.
+
+**Preserved regions** resolve a contradiction that made the upgrade contract
+unusable. Three layer-1 files ship mandatory `{{PLACEHOLDER}}`s that must be filled
+to mean anything, and the CHANGELOG classes them *Copy: replace outright* — fill
+them and the next upgrade reverts them, leave them and layer 1 ships broken text.
+A `copy` file may now carry one region an upgrade re-inserts:
+
+```markdown
+<!-- LOCAL: preserved by /framework-upgrade -->
+<!-- /LOCAL -->
+```
+
+A self-test asserts every `upstream` path in the template exists, so the template
+cannot rot into naming moved files — which would recreate the silent skip it was
+written to end.
+
+### The stub ratchet — something finally requires the implementation to be real
+
+Nothing did. The word *coverage* appears nowhere as a requirement, and greps for
+`stub`, `TODO`, `not implemented` and `NotImplementedException` across `process/`,
+`stacks/` and the commands returned zero hits. The two review checkboxes that
+gesture at it do not close the gap: *"tests accompany the behavior introduced in
+this phase"* is a **co-location** predicate that a test asserting nothing
+satisfies, and *"no tests weakened, skipped, or deleted"* is a **diff** predicate
+constraining changes to existing tests while saying nothing about the strength of
+new ones.
+
+So a phase could persist a value, leave the block holding the feature's stated core
+invariant empty behind a `TODO`, write three tests asserting a status code and the
+presence of a field, pass the build, earn a **genuine** valid receipt with no
+forgery involved, tick every box in the AI review, and reach *"Done pending human
+review"* — with the feature unimplemented. The only thing between that and merge is
+the manual acceptance step, which is the first thing that gets rubber-stamped.
+
+`tooling/gate/check-stubs.sh` / `.ps1` is a **ratchet, not a threshold**: a
+brownfield repo baselines wherever it is today, and the only rule is that the
+number may not rise. Demanding zero would be ignored within a week, and a rule that
+gets ignored trains people to ignore the others. It runs as a CI step, covers
+tracked *and* untracked files (the gate runs on a dirty tree), excludes tests and
+docs, and fails closed with the one-command fix on screen when
+`.gate-stubs-baseline` is absent. `approved-stub: <where the spec defers it>`
+exempts a line, so a deliberate deferral is declared and reviewable rather than
+invisible.
+
+The AI review's unfalsifiable checkbox is replaced with a mapping: **for each
+acceptance criterion this phase touches, name the test that would fail if it
+regressed.** A criterion with no such test is a FAIL. That is something a reviewer
+can spot-check in ten seconds.
+
 ### Corrected claims
 
 The README said the receipt is evidence an AI "cannot fabricate". The fingerprint
@@ -165,6 +243,9 @@ stop checking the others.
 |---|---|
 | `tooling/gate/gate-node.sh`, `gate-dotnet.sh`, `gate-node.ps1`, `gate-dotnet.ps1` | **Merge** — you edited the step commands. Take the receipt-machinery and step-runner hunks; keep your steps. `gate-dotnet.ps1` now uses a `$Steps` array like the Node gate. |
 | `tooling/claude/hooks/guard-installs.sh`, `.ps1` | **Install** — new files. |
+| `tooling/gate/check-stubs.sh`, `.ps1` | **Install** — new. Copy to each repo root, run `sh check-stubs.sh --baseline`, commit `.gate-stubs-baseline`. |
+| `tooling/claude/framework-manifest.template.json` | **Install** — new. Fill it in and commit as `.claude/framework-manifest.json`; `/framework-upgrade` offers to reconstruct one for older installs. Without it the next upgrade still skips layer 2, the templates, the gates and CI. |
+| `tooling/ci/CODEOWNERS` | **Install** — new. |
 | `tooling/claude/hooks/guard-packages.sh`, `.ps1` | **Copy** |
 | `tooling/claude/hooks/verify-guard.sh`, `.ps1` | **Copy** — then re-run it; a project that installed only the file guard fails here, which is the point. |
 | `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. |
