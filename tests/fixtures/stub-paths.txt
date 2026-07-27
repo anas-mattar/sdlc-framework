@@ -142,3 +142,22 @@ skip .dockerignore
 skip .npmrc
 source .eslintrc.js
 source .prettierrc.ts
+
+# --- a dotfile with an extension must still reach the extension rule ---------
+# The dotfile-config arm and the extension arm lived in the SAME `case`, so a
+# dotfile matched `.*)` and the block ended before `*.md`/`*.json`/`*.yml` were ever
+# tested. `.foo.md` classified as SOURCE while `README.md` did not. The
+# per-platform wrapper filename rule was masking the one instance anybody had
+# noticed (.gitlab-ci.yml); these rows cover the shape rather than the instance.
+skip .foo.md
+skip .bar.json
+skip .baz.yaml
+skip .notes.txt
+skip .data.csv
+skip .lock.sum
+skip .gitlab-ci.yml
+# A dotfile whose extension is NOT excluded stays source -- asserted above as
+# `source .eslintrc.js`. It is deliberately not repeated here: this file is compared
+# by a plain `diff` against `--classify` output, so a path listed twice with two
+# different verdicts makes the fixture contradict itself and the failure names the
+# fixture rather than the bug.

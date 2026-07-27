@@ -110,6 +110,14 @@ Record `Hosting platform:` and `Review evidence:` in `CLAUDE.md`, and `forge` an
 `review_evidence_cmd` in the manifest. `/framework-doctor` checks the two agree —
 a question answered twice and differently has one answer nobody is reading.
 
+> **The manifest needs the command ESCAPED; `CLAUDE.md` does not.** Three of the four
+> commands contain double quotes, and `review_evidence_cmd` is a JSON string value —
+> so pasting one verbatim produces invalid JSON and `/framework-doctor`, which reads
+> that file, fails at the last step of the install. `tooling/ci/README.md` carries
+> both forms side by side: paste the plain one into `CLAUDE.md` and the escaped one
+> into the manifest. This is the mistake a fresh-install rehearsal hit on GitHub,
+> Azure DevOps and Bitbucket; only GitLab's command is quote-free.
+
 ## Install Steps
 
 1. **Copy layer 1 (per your answers):**
@@ -175,9 +183,15 @@ a question answered twice and differently has one answer nobody is reading.
      threshold: an existing repo baselines wherever it is today, and the rule is
      only that the number may not rise. Mark a deliberate placeholder with
      `approved-stub: <where the spec defers it>` so the deferral is reviewable.
-   - Copy `tooling/claude/` content into `<project>/.claude/` (settings, hooks,
-     and the `/claim-feature`, `/phase-review`, `/phase-done`,
-     `/framework-doctor`, `/framework-upgrade` commands). Review the permissions
+   - Copy `settings.json`, `hooks/` and `commands/` from `tooling/claude/` into
+     `<project>/.claude/` — that is the `/claim-feature`, `/phase-review`,
+     `/phase-done`, `/framework-doctor` and `/framework-upgrade` commands.
+     **Do not copy the directory wholesale.** It also holds
+     `framework-manifest.template.json`, which step 7 installs separately under a
+     different name; copying everything leaves a second copy of the template
+     sitting in `.claude/` with 26 unfilled placeholders in it, inside the very
+     directory the guards protect, recorded in no manifest and mentioned by no
+     check. Review the permissions
      allowlist. **Two** guards ship and both are wired in `settings.json`:
      `guard-packages` blocks edits to manifest *files*, and `guard-installs`
      blocks the Bash *commands* that rewrite those same manifests (`npm i`,
@@ -217,6 +231,12 @@ a question answered twice and differently has one answer nobody is reading.
      a minimum-successful-builds branch restriction on Bitbucket. Do this on solo
      projects too (see Q5). On multi-repo projects, **every code repo needs its own
      pair** — the pipeline runs where the code is.
+     **If you are not on GitHub, prove the gate can fail before you trust it.** Only
+     the GitHub wrapper has ever executed on a real runner; the other three are
+     reviewed text, not observed behaviour. Push a branch that breaks the gate on
+     purpose — add a `// TODO` to a source file so the stub ratchet trips — and check
+     that the pipeline goes red *and* that the change request will not merge.
+     `tooling/ci/README.md` says what the test suite does and does not prove here.
    - **Baseline the stub ratchet.** From each repo root, run
      `sh check-stubs.sh --baseline` and commit `.gate-stubs-baseline`. It records
      how many unimplemented markers the repo has today; CI fails when the number

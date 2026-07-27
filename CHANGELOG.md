@@ -30,6 +30,95 @@ including detection of local edits that an upgrade would overwrite.
 
 ---
 
+## 2.3.2
+
+**The first fresh install of the current version, and the three things it found.**
+2.3.1 proved the *upgrade* path by walking v2.2.0 → v2.3.0. Nobody had followed the
+current `SETUP.md` start to finish. This release is what happened when someone did —
+Medium tier, team, multi-repo, both shipped stacks, GitHub — and all three findings
+are in the install path rather than the enforcement.
+
+**Pasting the review-evidence command into the manifest produced invalid JSON.**
+`SETUP.md` Q7 says to record `review_evidence_cmd` in
+`.claude/framework-manifest.json`. That is a JSON string value, and three of the four
+commands in `tooling/ci/README.md` contain double quotes:
+
+```
+gh pr view --json reviews --jq '[.reviews[] | select(.state=="APPROVED") | .author.login]'
+```
+
+Paste it as instructed and the manifest no longer parses — so `/framework-doctor`,
+which reads that file, fails at the last step of the install for a reason nothing
+warned about. It broke on GitHub, Azure DevOps and Bitbucket; only GitLab's command
+is quote-free. The README now carries both forms side by side, plain for `CLAUDE.md`
+and escaped for the manifest, plus a one-liner that derives the escaped value. The
+suite substitutes each of the four escaped commands into the template and parses the
+result — the template alone proved nothing, because it holds a placeholder and is
+therefore always valid.
+
+**`/framework-doctor` check 2 failed on a correctly completed install.** It grepped
+for a bare `{{`, and five hits survive filling every genuine placeholder: the
+template's own instruction line in `CLAUDE.md`, and four comments in the node gate
+scripts explaining the convention — one of which tripped the check while describing
+it. A doctor that fails a correct install is a doctor whose output gets skimmed, and
+then a real `{{SOLUTION}}` walks through; that is the argument this framework makes
+about the pin and about code ownership, applied to its own diagnostics. The pattern
+is now anchored to `{{UPPER_SNAKE}}`, which is the only form the templates ship.
+
+**Step 5 left a second copy of the manifest template in `.claude/`.** "Copy
+`tooling/claude/` content" brought `framework-manifest.template.json` along; step 7
+then installs it under a different name. The result is a file with 26 unfilled
+placeholders sitting inside the directory the guards protect, recorded in no manifest
+and mentioned by no check. Step 5 now names the three things to copy.
+
+**And one the fixes themselves introduced.** Chasing a loose end — a per-platform
+wrapper filename rule added in 2.3.1 with no fixture row — showed the rule was not
+loose at all: it was *masking* a bug. 2.3.1 put its new dotfile-config test in the
+same `case` as the extension tests, and a `case` stops at its first matching arm, so
+every dotfile matched `.*)` and the block ended before `*.md`, `*.json` or `*.yml`
+were ever reached. `.foo.md` classified as **source** while `README.md` did not —
+along with `.bar.json`, `.baz.yaml`, `.notes.txt`, `.data.csv` and `.lock.sum`. The
+filename rule happened to catch the one instance anybody had noticed,
+`.gitlab-ci.yml`, which is why it looked redundant rather than load-bearing.
+
+The dotfile test now sits in its own `case` after the extension block, so an excluded
+extension wins and an extension-less dotfile is still skipped. The filename rule is
+gone from both twins, since all three wrapper names end in `.yml` and were already
+covered.
+
+This was a **real sh/ps1 divergence** for the length of 2.3.1: `check-stubs.ps1`
+expresses the same rules as sequential `if`s, each returning only on its own match,
+so the ordering costs nothing there and it was correct throughout. Same rules, same
+order, different construct — and only one of them had the bug. Seven fixture rows now
+pin the agreement.
+
+**And the docs now say which wrappers have actually run.** Only the GitHub one has
+ever executed on a real runner — where it earned its place, catching a CRLF-only bug
+invisible on a local checkout and a `.sh`/`.ps1` divergence five review rounds had
+missed. GitLab, Azure DevOps and Bitbucket are reviewed text. What the suite proves
+about all four is narrow and is now stated as such: that every wrapper invokes all
+six steps and marks none of them allowed-to-fail. That is a check on the wrapper's
+*text*. It says nothing about whether the runner accepts the YAML, whether the image
+has `sha256sum` and `awk`, whether the checkout is deep enough for `git write-tree`
+to give the same fingerprint, or whether the job is required rather than advisory.
+`SETUP.md` and `tooling/ci/README.md` now tell installers on those three platforms to
+break the gate on purpose and confirm it blocks — a gate that reports without
+blocking is worse than none, because it produces evidence of a check that is not
+there.
+
+Suite: 104 passing.
+
+**Upgrade actions**
+
+| Action | What |
+|---|---|
+| **Re-copy** | `.claude/commands/framework-doctor.md` |
+| **Re-copy** | `check-stubs.sh` and `check-stubs.ps1` — the dotfile shadowing fix |
+| **Action** | if `.claude/framework-manifest.template.json` exists in your project, delete it — step 5 used to copy it in by accident |
+| **Action** | **re-baseline the ratchet** if you have any dotfile with an excluded extension (`.foo.md`, `.something.json`) carrying a marker. Those counted under 2.3.1 and no longer do, so the count may drop |
+| **Check by hand, once** | your manifest parses: `python3 -c "import json;json.load(open('.claude/framework-manifest.json'))"`. If it does not, the review-evidence command needs its double quotes escaped — see `tooling/ci/README.md` |
+| **Check by hand, once** | **not on GitHub?** Break the gate on purpose — add a `// TODO` to a source file — and confirm the pipeline goes red *and* the change request will not merge. Those three wrappers have never run on a real runner |
+
 ## 2.3.1
 
 **The first real upgrade rehearsal, and the five things it found.** A v2.2.0

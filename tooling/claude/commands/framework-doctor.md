@@ -28,14 +28,38 @@ then have no way to resolve, and every check falls back to the strictest reading
 
 ### 2. No unfilled placeholders
 
-Search `CLAUDE.md` and every gate script for `{{`:
+Search `CLAUDE.md` and every gate script for a real placeholder — `{{` followed by
+UPPER_SNAKE and a closing brace, which is the only form the templates use:
 
 ```sh
-grep -rn "{{" CLAUDE.md gate.ps1 gate.sh 2>/dev/null
+grep -rnE '\{\{[A-Z_]+\}\}' CLAUDE.md gate.ps1 gate.sh 2>/dev/null
 ```
 
 Any hit is a FAIL — `{{SOLUTION}}` and `{{TEST_PROJECT}}` in a gate script are the
 usual survivors, and they make the gate silently meaningless.
+
+**The pattern is anchored on purpose.** This check used to grep for a bare `{{`,
+and it therefore failed on every correctly completed install. The first fresh-install
+rehearsal produced five hits after every genuine placeholder had been filled:
+
+```
+CLAUDE.md:4      Fill every {{…}} placeholder. Delete sections excluded by…
+web/gate.ps1:21  # Replace the {{...}} placeholders with this project's actual scripts.
+web/gate.ps1:24  # …so /framework-doctor check 2 (grep for "{{") catches an
+web/gate.sh:91   # Replace the {{...}} placeholders with this project's actual scripts.
+web/gate.sh:94   # …so /framework-doctor check 2 (`grep -rn "{{"`) catches an
+```
+
+The first is the template's own instruction, which survives into the installed file.
+The last four are the node gate scripts explaining the convention — and one of them
+tripped the check while describing the check. A doctor that fails a correct install
+is a doctor whose output people learn to skim, and then a real `{{SOLUTION}}` walks
+through it. That is the argument this framework makes about the pin and about
+CODEOWNERS; it applies to its own diagnostics.
+
+Every placeholder the templates actually ship is `{{UPPER_SNAKE}}`. The two prose
+forms — `{{...}}` and `{{…}}` — are how the docs *name* a placeholder without being
+one, and the anchored pattern excludes both.
 
 ### 3. Gate script present and runnable per repo
 
