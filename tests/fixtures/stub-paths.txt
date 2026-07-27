@@ -2,7 +2,12 @@
 # the verdict each one must return. The format is exactly what --classify prints:
 #
 #     source <path>     this file's markers count toward the ratchet
-#     skip   <path>     this file is not shipped behaviour
+#     skip <path>       this file is not shipped behaviour
+#
+# EXACTLY ONE SPACE between the verdict and the path. The comparison is a plain
+# `diff` against what `--classify` prints, and it prints one space. This header used
+# to align the two examples into columns, which is how seventeen rows got added with
+# padding that made the fixture disagree with itself.
 #
 # tests/framework-checks.sh strips the verdict column to build the input, runs
 # both implementations, and diffs their output against THIS FILE.
@@ -98,3 +103,42 @@ skip thing.spec.ts
 skip Thing.Spec.cs
 skip src/spec/support.rb
 skip src/specs/support.rb
+
+# --- the framework's OWN installed tooling is not project source -------------
+# Found by the first real v2.2.0 -> v2.3.0 upgrade rehearsal. A fresh multi-repo
+# install with ZERO application code baselined at 1, because the word TODO appears
+# in a COMMENT inside tooling/ci/gate-ci.sh. Consequence, reproduced: appending one
+# explanatory `# TODO:` line to the framework's own CI script made the ratchet FAIL
+# on a project whose code had not changed. Every framework release that edits a
+# comment in its own tooling would break every consuming project's ratchet.
+#
+# These are files the framework installs and owns. A marker in them is upstream's
+# prose about deferred work, never the project's.
+skip gate.sh
+skip gate.ps1
+skip tooling/ci/gate-ci.sh
+skip api/tooling/ci/gate-ci.sh
+skip .claude/hooks/guard-installs.sh
+skip .claude/hooks/verify-guard.ps1
+skip .claude/settings.json
+skip .claude/commands/phase-done.md
+skip .github/workflows/gate.yml
+skip .github/CODEOWNERS
+skip azure-pipelines.yml
+skip bitbucket-pipelines.yml
+# ...but a project file that merely LOOKS like tooling is still source.
+source src/gate.ts
+source src/tooling/ci/pipeline.ts
+source app/github/webhook.go
+
+# --- configuration dotfiles are not code ------------------------------------
+# Same rehearsal: `.gitignore` classified as source while README.md did not,
+# because is_source is a deny-list and no rule named it. A leading-dot file with no
+# further extension is configuration; one WITH a code extension still counts.
+skip .gitignore
+skip .gitattributes
+skip .editorconfig
+skip .dockerignore
+skip .npmrc
+source .eslintrc.js
+source .prettierrc.ts

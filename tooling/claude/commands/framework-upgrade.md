@@ -26,11 +26,36 @@ each file came from. Read it first: every later step depends on it.
 
 - **Missing manifest** — the install predates v2.3.0. Say so and offer to
   reconstruct one from `tooling/claude/framework-manifest.template.json` by
-  inspecting the project (which `docs/stacks/*/` exist, which repos have a
-  `gate.sh`, which optional modules are present). Get the user to confirm the
-  reconstruction *before* using it, and write it out as its own commit. Do not
-  proceed on a guessed manifest — a wrong `upstream` path silently upgrades a file
-  from the wrong source.
+  inspecting the project (which stack folders exist, which repos have a `gate.sh`,
+  which optional modules are present). Get the user to confirm the reconstruction
+  *before* using it, and write it out as its own commit. Do not proceed on a guessed
+  manifest — a wrong `upstream` path silently upgrades a file from the wrong source.
+
+  **The template describes the CURRENT layout, so do not copy its `installed` paths
+  onto an older install.** It says `docs/stacks/<name>/`; a pre-2.3.0 project has
+  `docs/stack-backend/` and `docs/stack-frontend/`. It lists
+  `<repo>/tooling/ci/gate-ci.sh` and a per-platform wrapper; a pre-2.3.0 project has
+  `.github/workflows/gate.yml` and no `gate-ci.sh` at all. Reconstructing straight
+  from the template therefore produces wrong `installed` paths for **exactly the
+  files a breaking rename moved** — the ones the drift check most needs to read.
+  Read the *installed* side off the project's disk and the *upstream* side out of
+  that version's own `SETUP.md`, which records the mapping as it was. For 2.2.0:
+
+  | Upstream at v2.2.0 | Installed at v2.2.0 | Where 2.3.0 moved it |
+  |---|---|---|
+  | `process/` (flat) | `docs/process/` | bucketed into `core/`, `team/`, `optional/` — same flat install target |
+  | `stacks/<backend>/` | `docs/stack-backend/` | `docs/stacks/<name>/` |
+  | `stacks/<frontend>/` | `docs/stack-frontend/` | `docs/stacks/<name>/` |
+  | the single gate.yml under tooling/ci/ | `.github/workflows/gate.yml` | `tooling/ci/<platform>/` wrapper + `tooling/ci/gate-ci.sh`, per repo |
+  | *(did not exist)* | — | `check-stubs.{sh,ps1}`, `guard-installs.{sh,ps1}`, `CODEOWNERS`, `.gate-sha256`, `.gate-stubs-baseline`, `process/core/exceptions.md` |
+  | a feature folder directly under specs/ | the same | `specs/feature/NNN-<name>/` — a one-time `git mv` per feature |
+
+  The two left-hand cells in the last two rows are deliberately not written as
+  backticked path patterns. The suite scans shipped documents for the pre-2.3.0
+  spec layout and for file references that no longer resolve, and a migration table
+  has to *name* what it is migrating from — so writing those forms literally here
+  would trip both checks. Weakening a check to accommodate the prose describing it
+  is the trade this framework exists to refuse.
 - **Current version:** `framework_version` in the manifest, cross-checked against
   the `Framework: sdlc-framework vX.Y.Z` line in `CLAUDE.md`. If the two disagree,
   stop and report — one of them was updated by hand and you cannot tell which is
@@ -57,9 +82,33 @@ its `upstream` path **as it was at the recorded version**, not against the new
 version, which would flag every legitimate upstream change as local drift:
 
 ```sh
-git -C <framework> show v<CURRENT>:<entry.upstream> > /tmp/upstream-orig
-diff --strip-trailing-cr /tmp/upstream-orig <entry.installed>
+rm -rf /tmp/up && mkdir -p /tmp/up
+git -C <framework> archive v<CURRENT> <entry.upstream> | tar x -C /tmp/up
+diff -r --strip-trailing-cr /tmp/up/<entry.upstream> <entry.installed>
 ```
+
+**`git archive`, not `git show`, and `diff -r`.** Eight of the manifest's twenty-two
+entries are DIRECTORIES — `process/core/`, `process/templates/`, both
+`stacks/<name>/`, `modules/contracts/`, `tooling/claude/commands/`,
+`tooling/claude/hooks/`, `tooling/project-docs/` — which is to say all of layer 2,
+the hooks, the slash commands and the layer-3 skeletons. `git show v2.2.0:process/`
+does not print those files; it prints a *tree listing*:
+
+```
+tree v2.2.0:process/
+
+branch-strategy.md
+definition-of-done.md
+...
+```
+
+`diff` then compares that listing against a directory and exits 2 with
+`diff: docs/process/uo: No such file or directory`. It fails loudly rather than
+reporting false agreement, which is the only reason this was a nuisance and not a
+silent hole — but the step that earns this command had no working recipe for 36% of
+the manifest, including every directory where the editable content actually lives.
+`git archive | tar x` writes real files for a path of either kind, so one recipe
+covers both.
 
 **`--strip-trailing-cr` is not optional.** `git show` emits LF; a Windows working
 copy has CRLF. Without it every single file reports as drifted and the check is

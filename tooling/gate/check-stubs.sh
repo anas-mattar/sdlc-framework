@@ -116,6 +116,21 @@ is_source() {  # is_source <path>
         # its own comments. Left in, it would count six of its own lines on a clean
         # repo -- a number nobody can explain and everybody learns to ignore.
         check-stubs.sh|check-stubs.ps1) return 1 ;;
+        # THE FRAMEWORK'S OWN INSTALLED TOOLING IS NOT PROJECT SOURCE. The first
+        # real v2.2.0 -> v2.3.0 upgrade rehearsal caught this: a fresh multi-repo
+        # install with ZERO application code baselined at 1, because the word TODO
+        # appears in a COMMENT inside tooling/ci/gate-ci.sh. Appending one more
+        # explanatory `# TODO:` line to that script then made the ratchet FAIL on a
+        # project whose own code had not changed -- so any framework release that
+        # edits a comment in its own tooling breaks every consuming project's
+        # ratchet. A marker in these files is upstream's prose about deferred work;
+        # it was never the project's.
+        gate.sh|gate.ps1|gate-ci.sh) return 1 ;;
+        # A leading-dot file with no further extension is configuration, not code.
+        # `.gitignore` counted as source while README.md did not, purely because
+        # this deny-list happened to name one and not the other. A dotfile WITH a
+        # code extension (.eslintrc.js) is still source -- see the case below.
+        .*) case "$_b" in *.*.*) ;; *) return 1 ;; esac ;;
         # Extensions are matched case-INSENSITIVELY (PowerShell's -match is, so the
         # bracket classes are how the .sh agrees with it rather than the other way
         # round -- `README.MD` must not be source on one platform only).
@@ -128,6 +143,23 @@ is_source() {  # is_source <path>
     case "/$_p" in
         */node_modules/*|*/vendor/*|*/dist/*|*/build/*) return 1 ;;
         */test/*|*/tests/*|*/Test/*|*/Tests/*|*/__tests__/*|*/spec/*|*/specs/*) return 1 ;;
+    esac
+    # Framework-owned DIRECTORIES, matched on the path rather than the basename so
+    # a project's own `src/tooling/ci/pipeline.ts` stays source. Anchored with a
+    # leading `/` on both sides of the comparison, so `.claude/` matches at the repo
+    # root or under a sub-repo path and `app/github/webhook.go` does not.
+    case "/$_p" in
+        */.claude/*|*/.github/*) return 1 ;;
+    esac
+    # Deliberately NO `*/tooling/ci/*` rule. The only framework file that lands
+    # there is gate-ci.sh, already excluded by basename above, and a directory rule
+    # swallowed a project's own `src/tooling/ci/pipeline.ts` -- real source, in a
+    # directory that merely shares a name. Excluding a path because it resembles the
+    # framework's layout is how a ratchet stops counting the code it exists for.
+    # The per-platform CI wrapper filenames, which live at a repo root.
+    case "$_p" in
+        azure-pipelines.yml|bitbucket-pipelines.yml|.gitlab-ci.yml) return 1 ;;
+        */azure-pipelines.yml|*/bitbucket-pipelines.yml|*/.gitlab-ci.yml) return 1 ;;
     esac
     case "$_p" in
         docs/*|specs/*) return 1 ;;
@@ -411,7 +443,7 @@ fi
 if [ "${1:-}" = "--baseline" ]; then
     echo "$current" > "$BASELINE_FILE"
     echo "STUBS: baseline set to $current — commit $BASELINE_FILE."
-    echo "  Pin it too, in the same commit:  sha256sum gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 $BASELINE_FILE > .gate-sha256"
+    echo "  Pin it too, in the same commit:  sha256sum gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 $BASELINE_FILE tooling/ci/gate-ci.sh > .gate-sha256"
     exit 0
 fi
 

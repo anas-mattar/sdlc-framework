@@ -586,6 +586,40 @@ else
     fi
 fi
 
+# --- 7e-iii. the pin covers the script that carries the checks ---------------
+# gate-ci.sh pins gate.sh, the ratchet and the baseline. Until the first real
+# upgrade rehearsal it did not pin ITSELF -- and the install guard deliberately
+# leaves `gate.*` and `check-stubs.*` outside its perimeter *on the stated grounds
+# that CI pins them*. So the one file that decides what CI enforces was covered by
+# neither the pin nor the perimeter, protected only by CODEOWNERS, which is advisory
+# until somebody reads the diff. Same shape as the finding the pin exists to close,
+# reintroduced by the refactor that moved the checks into one place.
+#
+# Asserted three ways, because each catches a different mistake: the PINNED list
+# names it, the every-step contract still holds, and the two places that spell the
+# regeneration command out for a human agree with the list.
+if [ ! -f tooling/ci/gate-ci.sh ]; then
+    bad "tooling/ci/gate-ci.sh is missing -- every CI wrapper invokes it"
+else
+    pin_list=$(sed -n "s/^PINNED='\(.*\)'$/\1/p" tooling/ci/gate-ci.sh)
+    pin_bad=""
+    case " $pin_list " in
+        *" tooling/ci/gate-ci.sh "*) ;;
+        *) pin_bad="PINNED does not name tooling/ci/gate-ci.sh" ;;
+    esac
+    # The human-facing regeneration commands must list the same files, or someone
+    # follows the printed command and writes a pin that the step then rejects.
+    for src in SETUP.md tooling/gate/check-stubs.sh; do
+        grep -q 'sha256sum .*gate-ci\.sh' "$src" 2>/dev/null \
+            || pin_bad="$pin_bad; $src prints a sha256sum command that omits gate-ci.sh"
+    done
+    if [ -z "$pin_bad" ]; then
+        ok "the pin covers gate-ci.sh, and both printed regeneration commands agree"
+    else
+        bad "the pin does not cover the script that carries every check: $pin_bad"
+    fi
+fi
+
 # Every platform needs its ownership story present -- a file where the platform has
 # one, written instructions where it does not. Bitbucket and Azure DevOps have no
 # CODEOWNERS equivalent at all, and an install that assumes otherwise believes it
@@ -989,6 +1023,38 @@ fi
 echo "Stub ratchet behavior"
 STUB_PATHS=tests/fixtures/stub-paths.txt
 STUB_LINES=tests/fixtures/stub-lines.md
+
+# --- the .sh side against the fixture, WITHOUT requiring pwsh ----------------
+# This assertion used to live inside the `else` branch below, which only runs when
+# PowerShell is installed. So on every machine without it -- every macOS and Linux
+# contributor, and the sandbox this framework is usually evaluated in -- all 80
+# fixture paths went unchecked, and the .sh classifier could regress freely. It was
+# found by reverting a fresh is_source fix and watching the suite stay green.
+#
+# Parity needs both implementations; the FIXTURE's verdict needs only one. Assert
+# what can be asserted here, and compare the twins below when the twin can run.
+if [ ! -f "$STUB_PATHS" ]; then
+    bad "missing $STUB_PATHS -- the stub ratchet has no classification coverage"
+else
+    fx_want="${TMPDIR:-/tmp}/fx-want.$$"
+    grep -v '^[[:space:]]*#' "$STUB_PATHS" | grep -v '^[[:space:]]*$' > "$fx_want"
+    fx_args=$(awk '{ $1 = ""; sub(/^ /, ""); print }' "$fx_want")
+    fx_got="${TMPDIR:-/tmp}/fx-got.$$"
+    # shellcheck disable=SC2086
+    set -f
+    sh tooling/gate/check-stubs.sh --classify $fx_args > "$fx_got" 2>/dev/null
+    set +f
+    if [ ! -s "$fx_got" ]; then
+        bad "check-stubs.sh classified nothing -- is $STUB_PATHS still '<verdict> <path>' per line?"
+    elif diff "$fx_want" "$fx_got" >/dev/null 2>&1; then
+        ok "check-stubs.sh returns the fixture's verdict for all $(grep -c '' "$fx_want" | tr -d ' ') paths"
+    else
+        bad "check-stubs.sh disagrees with the verdict written in $STUB_PATHS:"
+        diff "$fx_want" "$fx_got" | sed 's/^/          /'
+    fi
+    rm -f "$fx_want" "$fx_got"
+fi
+
 if [ ! -f "$STUB_PATHS" ] || [ ! -f "$STUB_LINES" ]; then
     bad "missing $STUB_PATHS or $STUB_LINES -- the stub ratchet has no behavioural coverage"
 elif ! command -v pwsh >/dev/null 2>&1; then

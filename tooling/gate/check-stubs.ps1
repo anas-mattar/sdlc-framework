@@ -95,6 +95,20 @@ function Test-IsSource([string]$Path) {
     # own comments. Left in, it would count several of its own lines on a clean
     # repo -- a number nobody can explain and everybody learns to ignore.
     if ($b -ceq 'check-stubs.sh' -or $b -ceq 'check-stubs.ps1') { return $false }
+    # THE FRAMEWORK'S OWN INSTALLED TOOLING IS NOT PROJECT SOURCE. The first real
+    # v2.2.0 -> v2.3.0 upgrade rehearsal caught this: a fresh multi-repo install
+    # with ZERO application code baselined at 1, because the word TODO appears in a
+    # COMMENT inside tooling/ci/gate-ci.sh. Appending one more explanatory `# TODO:`
+    # line to that script then made the ratchet FAIL on a project whose own code had
+    # not changed -- so any framework release that edits a comment in its own
+    # tooling would break every consuming project's ratchet. Kept in step with
+    # is_source in check-stubs.sh.
+    if ($b -ceq 'gate.sh' -or $b -ceq 'gate.ps1' -or $b -ceq 'gate-ci.sh') { return $false }
+    # A leading-dot file with no further extension is configuration, not code.
+    # `.gitignore` counted as source while README.md did not, purely because the
+    # deny-list happened to name one and not the other. A dotfile WITH a code
+    # extension (.eslintrc.js) is still source, which is what the second test allows.
+    if ($b.StartsWith('.') -and $b.IndexOf('.', 1) -lt 0) { return $false }
     if ($b -match '\.(md|txt|json|yml|yaml|csv|svg|lock|sum)$') { return $false }
     if ($b -clike '*.min.js') { return $false }
     if (Test-IsTestName $b) { return $false }
@@ -103,6 +117,19 @@ function Test-IsSource([string]$Path) {
                      'test', 'tests', 'Test', 'Tests', '__tests__', 'spec', 'specs')) {
         if ($segments.Contains("/$d/")) { return $false }
     }
+    # Framework-owned directories, matched on the path so a project's own
+    # `app/github/webhook.go` stays source.
+    foreach ($d in @('.claude', '.github')) {
+        if ($segments.Contains("/$d/")) { return $false }
+    }
+    # The per-platform CI wrapper filenames, which live at a repo root. Deliberately
+    # NO tooling/ci/ directory rule: the only framework file there is gate-ci.sh,
+    # already excluded by basename, and a directory rule swallowed a project's own
+    # src/tooling/ci/pipeline.ts -- real source in a directory that merely shares a
+    # name. Excluding a path because it resembles the framework's layout is how a
+    # ratchet stops counting the code it exists for.
+    if ($b -ceq 'azure-pipelines.yml' -or $b -ceq 'bitbucket-pipelines.yml' -or
+        $b -ceq '.gitlab-ci.yml') { return $false }
     if ($p -clike 'docs/*' -or $p -clike 'specs/*') { return $false }
     return $true
 }

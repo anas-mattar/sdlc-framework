@@ -222,7 +222,7 @@ a question answered twice and differently has one answer nobody is reading.
      how many unimplemented markers the repo has today; CI fails when the number
      goes up.
    - **Pin the gate.** From each repo root, run
-     `sha256sum gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 .gate-stubs-baseline > .gate-sha256`
+     `sha256sum gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 .gate-stubs-baseline tooling/ci/gate-ci.sh > .gate-sha256`
      and commit all of it — dropping the `.ps1` names only if this repo does not
      have them. CI refuses to run an unpinned gate, and it checks that the pin
      **names** every one of those files that exists — `sha256sum -c` only verifies
@@ -231,6 +231,11 @@ a question answered twice and differently has one answer nobody is reading.
      the install guard deliberately leaves `gate.*` and `check-stubs.*` outside
      its perimeter *on the grounds that CI pins them*; a pin naming only the POSIX
      halves left the ratchet a Windows developer actually runs editable in silence.
+     `tooling/ci/gate-ci.sh` is in the list for the same reason and is the newest
+     addition: it carries all six enforcement steps, and until the first real
+     upgrade rehearsal it sat in neither the pin nor the install guard's
+     perimeter -- protected only by CODEOWNERS, which is advisory until somebody
+     reads the diff.
 
      This is what stops the gate being weakened silently: CI runs a script that
      lives in the repository, from the change request's own head branch, so a gate

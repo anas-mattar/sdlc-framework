@@ -97,7 +97,20 @@ fail() { printf '%s\n' "$@"; exit 1; }
 # Each name is required only if the file EXISTS: a POSIX-only team has no gate.ps1
 # to pin, and demanding a hash for a file that is not there would fail a correct
 # install. What this will not tolerate is a file that exists and is not named.
-PINNED='gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 .gate-stubs-baseline'
+# tooling/ci/gate-ci.sh PINS ITSELF, and it has to.
+#
+# The first real upgrade rehearsal found this file in neither protection. The
+# install guard deliberately leaves `gate.*` and `check-stubs.*` outside its
+# perimeter *on the stated grounds that CI pins them* -- and when the six
+# enforcement steps moved out of the platform YAML into this script, the file that
+# decides what CI enforces was covered by neither the pin nor the perimeter. Only
+# CODEOWNERS stood in the way, and CODEOWNERS is advisory until someone reads the
+# diff.
+#
+# That is the same shape as the finding the pin exists to close, reintroduced by
+# the refactor that was supposed to reduce duplication. A control that delegates
+# its own protection has to check that the delegate actually covers it.
+PINNED='gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 .gate-stubs-baseline tooling/ci/gate-ci.sh'
 
 step_pin() {
     present=""
