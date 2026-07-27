@@ -30,6 +30,75 @@ including detection of local edits that an upgrade would overwrite.
 
 ---
 
+## 2.3.1
+
+**The first real upgrade rehearsal, and the five things it found.** A v2.2.0
+multi-repo install was built from the tag — Medium tier, team, both shipped stacks,
+a wrapper plus two sub-repos, worked in with a feature spec and layer-3 knowledge —
+then upgraded to v2.3.0. The upgrade completed. Five things were wrong on the way,
+and one of them was introduced by 2.3.0 itself.
+
+**`tooling/ci/gate-ci.sh` was in neither protection.** The install guard
+deliberately leaves `gate.*` and `check-stubs.*` outside its perimeter *on the
+stated grounds that CI pins them* — and when 2.3.0 moved the six enforcement steps
+out of the platform YAML into that one script, the file deciding what CI enforces
+was covered by neither the pin nor the perimeter. Code ownership only, which is
+advisory until somebody reads the diff. It is in `PINNED` now, and tampering with
+it fails the pin step.
+
+**The stub ratchet counted the framework's own tooling as project source.** A fresh
+multi-repo install with *zero application code* baselined at **1**, from the word
+`TODO` in a **comment** inside `gate-ci.sh`. Appending one more explanatory
+`# TODO:` line there then failed the ratchet on a project whose own code had not
+changed — so every framework release that edits a comment in its own tooling would
+break every consuming project's ratchet. `gate.sh`, `gate.ps1`, `gate-ci.sh`,
+`.claude/`, `.github/` and the per-platform wrapper filenames are excluded now, and
+a zero-code install baselines at 0. There is deliberately **no** `tooling/ci/`
+directory rule: the only framework file there is `gate-ci.sh`, already excluded by
+basename, and a directory rule swallowed a project's own
+`src/tooling/ci/pipeline.ts`. Excluding a path because it *resembles* the
+framework's layout is how a ratchet stops counting the code it exists for.
+
+**Leading-dot config files counted as source.** `.gitignore`, `.gitattributes`,
+`.editorconfig`, `.npmrc` — while `README.md` did not, purely because the deny-list
+happened to name one and not the other. A dotfile *with* a code extension
+(`.eslintrc.js`) still counts.
+
+**`/framework-upgrade` Step 3's drift recipe was file-only.** Eight of the
+manifest's twenty-two entries are directories — all of layer 2, the hooks, the
+slash commands, the layer-3 skeletons. `git show v2.2.0:process/` prints a tree
+*listing*, not files, and the documented `diff` then exits 2. It failed loudly
+rather than reporting false agreement, which is the only reason this was a nuisance
+and not a hole — but the step that earns the command had no working recipe for 36%
+of the manifest. `git archive | tar x` with `diff -r` covers both kinds.
+
+**Step 2's manifest reconstruction pointed at a template describing only the
+current layout.** So reconstructing for a pre-2.3.0 install produced wrong
+`installed` paths for exactly the files a breaking rename had moved. Step 2 now
+carries the v2.2.0 mapping table and says to read the installed side off disk and
+the upstream side out of that version's own `SETUP.md`.
+
+Two findings about the **suite** rather than the framework. The classification
+fixture only ran when `pwsh` was present, so on every macOS and Linux machine all
+80 paths went unchecked and the `.sh` classifier could regress freely — found by
+reverting a fresh fix and watching the suite stay green. And seventeen fixture rows
+used padded whitespace, because the file's own header aligned its two examples into
+columns while `--classify` prints one space; the rows added in this release would
+themselves have failed CI.
+
+Suite: 103 passing.
+
+**Upgrade actions**
+
+| Action | What |
+|---|---|
+| **Re-copy** | `check-stubs.sh` and `check-stubs.ps1` |
+| **Re-copy** | `tooling/ci/gate-ci.sh`, into every code repo |
+| **Re-copy** | `.claude/commands/framework-upgrade.md` |
+| **Action** | **Re-baseline the ratchet.** The count will DROP, because the framework's own installed tooling no longer counts. Run `sh check-stubs.sh --baseline` and commit `.gate-stubs-baseline`, or the next CI run reports "improved" and invites you to do it anyway |
+| **Action** | **Regenerate `.gate-sha256`.** `PINNED` gained a sixth entry — `tooling/ci/gate-ci.sh` — so a pin written before this release no longer names every pinned file and CI will fail with `UNPINNED`. The command is printed by `--baseline` and in `SETUP.md` |
+| **Check by hand, once** | if any `.gitignore`-style config file was carrying a marker you relied on being counted, it no longer is |
+
 ## 2.3.0
 
 ### The last five findings: globs, quotes, `cp`, trailing dots, and the exemption's scope
