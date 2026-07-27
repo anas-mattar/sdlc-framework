@@ -58,6 +58,51 @@ else
     meh "PowerShell syntax (pwsh not installed)"
 fi
 
+# --- 3b. The working tree agrees with .gitattributes ------------------------
+# This check exists because the suite passed locally and failed in CI on two files
+# whose contents were identical. `.gitattributes` pins *.ps1 to eol=crlf; an editor
+# had written one of them with LF; and a parity extractor anchored to end-of-line
+# therefore saw a trailing quote on a clean checkout and not in the author's tree.
+#
+# A check whose verdict depends on the machine it runs on is not a check. So assert
+# the precondition directly: if the working tree does not have the line endings git
+# will produce on a fresh clone, then EVERY other result in this run describes a
+# tree nobody else will ever have. That is worth failing on, loudly, before the
+# reader trusts the fifty PASSes underneath it.
+#
+# `git ls-files --eol` is authoritative -- it reports what is in the index (i/),
+# what is in the working tree (w/), and the attributes in force -- so this does not
+# reimplement git's normalisation rules.
+echo "Line endings"
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    meh "working tree vs .gitattributes (not a git repository)"
+else
+    # The attribute column is `attr/text eol=crlf` -- TWO whitespace-separated
+    # tokens, not one. Reading it as a single field yielded "text" and the whole
+    # check silently matched nothing, which is the vacuity this file exists to
+    # forbid. Match the eol= directive against the whole line instead, and take the
+    # working-tree value from the w/ token.
+    eol_bad=$(git ls-files --eol 2>/dev/null | awk '
+        {
+            w = ""
+            for (i = 1; i <= NF; i++) if ($i ~ /^w\//) w = substr($i, 3)
+            # "none" means git sees no line endings at all (binary, or a single
+            # unterminated line); nothing to compare.
+            if (w == "" || w == "none") next
+            if ($0 ~ /eol=crlf/ && w != "crlf") { print $NF " -- pinned crlf, working tree is " w; next }
+            if ($0 ~ /eol=lf/   && w != "lf")   { print $NF " -- pinned lf, working tree is " w }
+        }')
+    if [ -z "$eol_bad" ]; then
+        ok "every tracked file has the line endings .gitattributes pins for it"
+    else
+        bad "the working tree disagrees with .gitattributes -- this run does not describe a clean checkout:"
+        printf '%s\n' "$eol_bad" | sed 's/^/        /'
+        printf '        Fix with:  git rm --cached -r . && git reset --hard\n'
+        printf '        (or re-checkout the named files). Until then, a green suite here\n'
+        printf '        says nothing about what CI will see.\n'
+    fi
+fi
+
 # --- 4. JSON / YAML validity ------------------------------------------------
 echo "Data files"
 # Find an interpreter that actually RUNS. On Windows `python3` is usually the
@@ -670,7 +715,10 @@ fact_check() {  # fact_check <label> <baseline> <pattern>
     fi
 }
 
-fact_check "human review: peer vs solo" 12 'peer review|reviewer .{0,12}(other than|!=)|own acceptance review'
+# 12 -> 11: the four CI wrappers each carried a copy of the solo-CI rationale when
+# they were split out of gate.yml; they now carry a pointer instead. Ratchets only
+# ever fall.
+fact_check "human review: peer vs solo" 11 'peer review|reviewer .{0,12}(other than|!=)|own acceptance review'
 fact_check "CI applies to solo too"     4 'CI .{0,30}(solo|not run by the party)|solo.{0,40}\bCI\b'
 fact_check "receipt: status vs reqs"    2 'status.{0,60}requirement|requirement.{0,60}status'
 fact_check "scope-tier artifacts"       8 'Small.{0,60}spec\.md|spec\.md.{0,40}Small'
@@ -775,10 +823,26 @@ fi
 # whoever wrote it. (The per-line exemption semantics are not comparable
 # mechanically -- they are covered by the behavioural check that both report the
 # same count on the same tree.)
-sh_mark=$(grep -E "^MARKERS=" tooling/gate/check-stubs.sh | sed "s/^MARKERS='//; s/'$//" \
-    | tr '|' '\n' | grep -v '^$' | sort -u)
-ps_mark=$(grep -E "^\\\$Markers = " tooling/gate/check-stubs.ps1 | sed "s/^\\\$Markers = '//; s/'$//" \
-    | tr '|' '\n' | grep -v '^$' | sort -u)
+#
+# `tr -d '\r'` FIRST, and this is not defensive padding. `.gitattributes` pins
+# *.ps1 to eol=crlf, so a fresh checkout -- which is what CI gets -- ends this line
+# `...todo!\(\)'<CR>`. The `s/'$//` below anchors to end of line, the last character
+# is the CR rather than the quote, and the trailing quote survives into the
+# comparison: sh reported `todo!\(\)` against ps1's `todo!\(\)'` and the suite went
+# red on two files whose contents agree perfectly.
+#
+# The reason this went unnoticed is worth more than the fix. The author's working
+# tree holds whatever their editor last wrote -- LF, here -- so the check passed
+# locally and could ONLY fail on a clean clone. That is the same shape as every
+# other finding in this file: a check whose verdict depends on the machine it runs
+# on is not a check. See the working-tree/attribute assertion in section 3.
+#
+# The guard extractors below and above are immune by accident, not by design: they
+# use `grep -oE "'[^']+'"`, which never captures a CR sitting outside the quotes.
+sh_mark=$(grep -E "^MARKERS=" tooling/gate/check-stubs.sh | tr -d '\r' \
+    | sed "s/^MARKERS='//; s/'$//" | tr '|' '\n' | grep -v '^$' | sort -u)
+ps_mark=$(grep -E "^\\\$Markers = " tooling/gate/check-stubs.ps1 | tr -d '\r' \
+    | sed "s/^\\\$Markers = '//; s/'$//" | tr '|' '\n' | grep -v '^$' | sort -u)
 if [ -z "$sh_mark" ] || [ -z "$ps_mark" ]; then
     bad "could not extract the stub-marker list from one or both check-stubs scripts"
 elif [ "$sh_mark" = "$ps_mark" ]; then
