@@ -211,7 +211,33 @@ esac
 # Edit and Write, so each avoided process is paid back thousands of times -- and on
 # Windows/MSYS, where fork is expensive, a chain of small helpers is what makes a
 # long verify-guard run stall partway through.
-norm=$(printf '%s' "$file_path" | sed 's|\\|/|g; s|//*|/|g')
+#
+# TRAILING SPACES AND DOTS ARE STRIPPED PER COMPONENT, because Win32 strips them
+# when it opens the file. `package.json ` and `package.json.` both resolve to
+# `package.json`, and `.claude/allow-package-changes ` resolves to the approval
+# marker -- so one Write with a trailing space created the marker that disables
+# both guards permanently, on the platform settings.json is shipped configured
+# for. The guard returned 0 for every one of these:
+#
+#     package.json     package.json.     Gemfile.
+#     .claude/settings.json      .claude/allow-package-changes
+#
+# `s|[ .]*/|/|g` handles interior components, `s|[ .]*$||` the last one. A file
+# genuinely named `foo.` cannot be created on Windows at all, and on POSIX the
+# cost of normalising it is that `foo.` is judged as `foo` -- over-blocking, which
+# is the direction this guard is documented to fail in.
+#
+# ORDER MATTERS. Squeezing slashes BEFORE stripping dots leaves a fresh double
+# slash behind: `src/../package.json` became `src//package.json`, because `../`
+# collapses to `/` after the squeeze has already run. It still blocked -- the
+# basename decides -- but the directory-shaped patterns (`.cargo/config.toml`) are
+# matched against the whole path, and those are exactly the entries that spent
+# three releases matching nothing. Strip first, squeeze last.
+#
+# A component of `.` or `..` is stripped along with the rest, so `./package.json`
+# normalises to `/package.json`. That is only ever used for pattern matching, never
+# to open a file, and `*/package.json` matches it.
+norm=$(printf '%s' "$file_path" | sed 's|\\|/|g; s|[ .]*/|/|g; s|[ .]*$||; s|//*|/|g')
 
 # GUARDED-MANIFESTS-BEGIN
 GUARDED="package.json package-lock.json npm-shrinkwrap.json yarn.lock

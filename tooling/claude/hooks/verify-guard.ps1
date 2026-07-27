@@ -63,12 +63,12 @@ $fail = $false
 # Regenerate after a legitimate list change with:
 #     powershell -NoProfile -File .claude/hooks/verify-guard.ps1 -PrintDigests
 $GuardedDigestSh  = 'c68dc68623405006f36b034cf73dcc70282b0442ec9af1eaed1e5b6f3c0980a7'
-$InstallDigestSh  = '37c9426ef80866a630e7304f8460545140eb3e14fc0108924c1fe42baf37e979'
+$InstallDigestSh  = '704bb73f2bf79e6ed895603f7a46718ec1900b33d0a1129d4d198e404617875d'
 $GuardedDigestPs1 = '04617cf3a9f4d77f189fc678f38dab71890c74897cde76a2e7bd608c4a3a5aff'
-$InstallDigestPs1 = '2e5f65bd2e5bc60e89d126d7f2ca08afcdee72bd3ec27bb8d88d4cd0a3843843'
+$InstallDigestPs1 = 'ece8b32bc36ed29552439b3865cace270d469fddb5cc63e7486ec848e331f0c9'
 # Kept as a floor of last resort only. Not the assertion any more.
 $GuardedFloor = 86
-$InstallFloor = 56
+$InstallFloor = 63
 
 # The list body, normalised so a digest survives what legitimately differs between
 # checkouts. This MUST agree byte for byte with list_body() in verify-guard.sh:

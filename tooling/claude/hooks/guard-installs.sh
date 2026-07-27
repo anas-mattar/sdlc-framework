@@ -238,6 +238,30 @@ STRIP_PATHS='s/[^ ]*\///g; s/\.cmd / /g; s/\.exe / /g; s/\.bat / /g'
 hay2=" $(printf '%s' "$hay" | sed "s/ -[^ ]*/ /g; $STRIP_PATHS" | tr -s ' ') "
 hay3=" $(printf '%s' "$hay" | sed "s/ -[^ ]* [^ ]*/ /g; $STRIP_PATHS" | tr -s ' ') "
 
+# A FOURTH view, with quotes and backslashes DELETED rather than translated.
+#
+# The three above all derive from `base`, which maps `"` and `'` to a SPACE. That
+# is right for a quote at a word boundary -- `npm "install" x` becomes
+# `npm  install  x` and squeezes to `npm install x` -- and exactly wrong for a
+# quote INSIDE a word, which the shell removes rather than treating as a
+# separator. `npm in"stall" x` became `npm in stall x`, so the word `install`
+# never existed in any haystack and the pattern could not match. Same for a
+# backslash, which `base` maps to `/` for path stripping: `n\pm install x` became
+# `n/pm install x`, and `s/[^ ]*\///g` then deleted the whole word.
+#
+# These are ordinary shell, not evasion syntax:
+#     sh -c 'echo npm in"stall" x'   ->  npm install x
+#     sh -c 'echo n\pm install x'    ->  npm install x
+#
+# So: delete the three characters instead of translating them, and derive the same
+# two option-stripped variants from that. A pattern matching ANY of the six views
+# is a hit. Deleting cannot create a false positive that translating avoids --
+# it can only join words the shell also joins.
+joined=$(printf '%s' "$cmd" | tr 'A-Z\t\n\r' 'a-z   ' | tr -d '"\047\\' | tr -s ' ')
+hay4=" $(printf '%s' "$joined" | tr -s ';&|(){}\140' ' ' | tr -s ' ') "
+hay5=" $(printf '%s' "$hay4" | sed "s/ -[^ ]*/ /g; $STRIP_PATHS" | tr -s ' ') "
+hay6=" $(printf '%s' "$hay4" | sed "s/ -[^ ]* [^ ]*/ /g; $STRIP_PATHS" | tr -s ' ') "
+
 # --- the guard guards itself, on this path too ------------------------------
 # guard-packages.* blocks WRITES to the approval marker, the hook configuration
 # and the hook scripts, and its comment explains why the block has to be there,
@@ -279,7 +303,18 @@ hay3=" $(printf '%s' "$hay" | sed "s/ -[^ ]* [^ ]*/ /g; $STRIP_PATHS" | tr -s ' 
 # Reads still pass: `cat`, `grep -r`, `ls`, `diff`, `git diff`, `test -f`,
 # `sh .claude/hooks/verify-guard.sh` and `cp .claude/settings.json /tmp/backup`
 # are all allowed, because the doctor and every ordinary inspection need them.
-psegs=$(printf '%s' "$base" | tr ';&|()\140' '\n\n\n\n\n\n')
+#
+# Segments come from BOTH normalisations, for the same reason the install matcher
+# needs six haystacks: `base` maps a quote to a space, so `rm -rf .cl'a'ude` became
+# `rm -rf .cl a ude` and the literal `.claude` was not in any segment. `joined`
+# deletes the quote instead, which is what the shell does, and the perimeter path
+# reappears. Scanning both is cheap and cannot un-block anything -- a hit in either
+# is a hit.
+psegs=$(
+    printf '%s' "$base"   | tr ';&|()\140' '\n\n\n\n\n\n'
+    printf '\n'
+    printf '%s' "$joined" | tr ';&|()\140' '\n\n\n\n\n\n'
+)
 
 perimeter_hit=""
 # A here-doc redirect, not a pipe: the loop must run in THIS shell or
@@ -294,6 +329,55 @@ while IFS= read -r seg; do
     # .claude` and `rm -rf .claude` named the DIRECTORY and matched none of the
     # three files inside it -- the whole perimeter removed in one command that
     # never mentioned a single guarded path.
+    # A GLOB NEVER CONTAINS THE STRING IT MATCHES. The literal-substring test below
+    # is blind to `rm -rf .cla*`, which removes the entire perimeter while never
+    # mentioning `.claude` -- and that is ordinary shell, not evasion syntax:
+    #
+    #     $ ls -a          .  ..  .claude
+    #     $ rm -rf .cla*
+    #     $ ls -a          .  ..
+    #
+    # So before the literal test, look for any word carrying a glob metacharacter
+    # whose non-glob PREFIX is itself a prefix of a perimeter path. `.cla*` -> `.cla`
+    # is a prefix of `.claude`: hit. `dist/*` -> `dist/` is not: allowed. A bare `*`
+    # or `.*` has an empty prefix, which is a prefix of everything, so it is treated
+    # as a hit -- `rm -rf *` in the project root really would take the perimeter with
+    # it, and over-blocking is the direction this guard fails in.
+    _glob_hit=""
+    case "$seg" in
+        *'*'*|*'?'*|*'['*)
+            set -f
+            for _w in $seg; do
+                case "$_w" in
+                    -*) continue ;;                    # an option, not a path
+                    *'*'*|*'?'*|*'['*) ;;
+                    *) continue ;;
+                esac
+                # The text before the first metacharacter is what the glob is
+                # anchored to. Strip a leading ./ so `./.cla*` reads the same.
+                _pre=${_w%%[*?[]*}
+                _pre=${_pre#./}
+                for _pp in .claude .git/hooks; do
+                    case "$_pp" in
+                        "$_pre"*) _glob_hit=$_pp; break ;;
+                    esac
+                done
+                [ -z "$_glob_hit" ] || break
+            done
+            set +f ;;
+    esac
+    if [ -n "$_glob_hit" ]; then
+        # A read verb with a glob is still a read: `grep -r .cla*` inspects. Reuse
+        # the same allowlist the literal path below uses, rather than a second copy
+        # of it that could drift.
+        _gw=${seg%% *}; _gw=${_gw##*/}
+        case "$_gw" in
+            cat|ls|grep|egrep|fgrep|diff|cmp|head|tail|wc|stat|file|test|'['|od|xxd|\
+            realpath|readlink|basename|dirname|sha256sum|shasum|md5sum|find) ;;
+            *) perimeter_hit="$_glob_hit (matched by a glob: ${seg})"; break ;;
+        esac
+    fi
+
     for gp in .claude/allow-package-changes .claude/settings .claude/hooks/ .claude; do
         case "$seg" in *"$gp"*) ;; *) continue ;; esac
         # A redirection whose target is the perimeter path is a write whatever
@@ -345,13 +429,26 @@ while IFS= read -r seg; do
                 # argument. `-T` reads as `-t` here because the whole command was
                 # case-folded upstream; that over-blocks `cp -T <perimeter> /tmp/x`
                 # and over-blocking is the direction this guard fails in.
+                # ENUMERATING OPTION SPELLINGS LOSES. The previous version listed
+                # `-t`, `--target-directory`, `--target-directory=*` and `-*t`, and
+                # GNU cp accepts the directory ATTACHED to the short option as well
+                # as any unambiguous long-option abbreviation. Both of these
+                # overwrote a hook, confirmed by writing EVIL over one:
+                #
+                #     cp -t.claude/hooks /tmp/guard-packages.sh
+                #     cp --targ=.claude/hooks/ /tmp/guard-packages.sh
+                #
+                # So the test is inverted: if the segment carries ANY option at all,
+                # treat the perimeter path as a write target wherever it sits. The
+                # cost is that `cp -v <perimeter> /tmp/out` -- an ordinary read with
+                # a flag -- is now blocked, and that is the direction this guard is
+                # documented to fail in. `cp <perimeter> /tmp/out` with no options
+                # still reads fine, which is the form the block message advertises.
                 _tflag=0
                 set -f
                 for _w in $seg; do
                     case "$_w" in
-                        -t|--target-directory|--target-directory=*) _tflag=1; break ;;
-                        --*) ;;
-                        -*t) _tflag=1; break ;;
+                        -*) _tflag=1; break ;;
                     esac
                 done
                 set +f
@@ -379,6 +476,8 @@ npm ci
 npm update
 npx
 npx --package
+npm exec
+npm x
 yarn add
 yarn install
 yarn up
@@ -394,6 +493,8 @@ bunx
 bun x
 deno add
 deno install
+dotnet restore
+dotnet tool restore
 dotnet add package
 dotnet package add
 dotnet tool install
@@ -411,8 +512,11 @@ uvx
 poetry add
 pipenv install
 conda install
+go mod tidy
+go mod download
 go get
 go install
+cargo fetch
 cargo add
 cargo install
 composer require
@@ -435,15 +539,16 @@ dart pub add"
 hit=""
 while IFS= read -r p; do
     [ -n "$p" ] || continue
-    case "$hay" in
-        *" $p "*) hit=$p; break ;;
-    esac
-    case "$hay2" in
-        *" $p "*) hit=$p; break ;;
-    esac
-    case "$hay3" in
-        *" $p "*) hit=$p; break ;;
-    esac
+    # Six views, not three: hay/hay2/hay3 translate quotes to spaces (right for a
+    # quote at a word boundary) and hay4/hay5/hay6 delete them (right for a quote
+    # inside a word, which is what the shell does). A pattern found in any view is
+    # a hit.
+    for _h in "$hay" "$hay2" "$hay3" "$hay4" "$hay5" "$hay6"; do
+        case "$_h" in
+            *" $p "*) hit=$p; break ;;
+        esac
+    done
+    [ -z "$hit" ] || break
 done <<EOF
 $INSTALL_COMMANDS
 EOF
