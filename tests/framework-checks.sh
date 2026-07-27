@@ -586,6 +586,58 @@ else
     fi
 fi
 
+# --- 7e-0. the review-evidence commands survive being put in the manifest ----
+# SETUP Q7 tells the installer to record `review_evidence_cmd` in
+# .claude/framework-manifest.json. That is a JSON string value, and three of the
+# four commands tooling/ci/README.md offers contain double quotes -- so pasting one
+# verbatim produced INVALID JSON, and /framework-doctor reads that file. The install
+# failed at its last step for a reason nothing warned about, on GitHub, Azure DevOps
+# and Bitbucket. Only GitLab's command is quote-free.
+#
+# The template alone proves nothing: it holds a `{{REVIEW_EVIDENCE_CMD}}` placeholder
+# and is therefore always valid. What has to parse is the FILLED instance, so this
+# substitutes each escaped form from the README's table and parses the result.
+echo "Review-evidence commands"
+if [ -z "$PY" ]; then
+    meh "review-evidence JSON check (no working python found)"
+elif [ ! -f tooling/ci/README.md ] || [ ! -f tooling/claude/framework-manifest.template.json ]; then
+    bad "cannot check review-evidence commands -- tooling/ci/README.md or the manifest template is missing"
+else
+    # The literal path, not $MANIFEST: that variable is assigned further down in this
+    # file, so using it here compared against an empty string and the check reported
+    # "cannot check" on a repository where both files were present.
+    rev_bad=$($PY - tooling/claude/framework-manifest.template.json tooling/ci/README.md <<'PYEOF'
+import json, re, sys
+tmpl = open(sys.argv[1], encoding="utf-8").read()
+readme = open(sys.argv[2], encoding="utf-8").read()
+# The escaped table lives under the "ready to paste into the manifest" heading. Take
+# the last cell of each row that names a platform, strip the markdown escaping of `|`
+# and the surrounding backticks.
+sect = readme.split("ready to paste into the manifest")[-1]
+rows = re.findall(r'^\|\s*(GitHub|GitLab|Azure DevOps|Bitbucket)\s*\|\s*(.+?)\s*\|\s*$',
+                  sect, re.M)
+if len(rows) != 4:
+    print(f"the escaped review-evidence table has {len(rows)} platform rows, expected 4")
+    raise SystemExit
+for name, cell in rows:
+    cmd = cell.strip().strip('`').replace('\\|', '|')
+    doc = tmpl.replace('{{REVIEW_EVIDENCE_CMD}}', cmd)
+    # Strip the remaining placeholders so only the command under test can break it.
+    doc = re.sub(r'\{\{[A-Z_]+\}\}', 'x', doc)
+    try:
+        json.loads(doc)
+    except Exception as e:
+        print(f"{name}: substituting its command makes the manifest invalid JSON ({e})")
+PYEOF
+)
+    if [ -z "$rev_bad" ]; then
+        ok "all 4 escaped review-evidence commands keep the manifest valid JSON"
+    else
+        bad "a review-evidence command breaks the manifest it is meant to be pasted into:"
+        printf '%s\n' "$rev_bad" | sed 's/^/          /'
+    fi
+fi
+
 # --- 7e-iii. the pin covers the script that carries the checks ---------------
 # gate-ci.sh pins gate.sh, the ratchet and the baseline. Until the first real
 # upgrade rehearsal it did not pin ITSELF -- and the install guard deliberately

@@ -107,7 +107,17 @@ function Test-IsSource([string]$Path) {
     # A leading-dot file with no further extension is configuration, not code.
     # `.gitignore` counted as source while README.md did not, purely because the
     # deny-list happened to name one and not the other. A dotfile WITH a code
-    # extension (.eslintrc.js) is still source, which is what the second test allows.
+    # extension (.eslintrc.js) is still source, which is what the next test allows.
+    #
+    # This side was never wrong, and the reason is worth recording: these are
+    # sequential `if`s, each returning only on its own match, so the dotfile test
+    # sitting BEFORE the extension test costs nothing -- `.foo.md` falls through to
+    # the `\.md$` rule below. The .sh twin expressed the same rules as arms of one
+    # `case`, which stops at its first match, so there the dotfile arm swallowed
+    # every dotfile before any extension was tested and `.foo.md` came back SOURCE
+    # while `README.md` did not. Same rules, same order, different construct, and
+    # only one of them had the bug. The fixture rows for `.foo.md`, `.bar.json`,
+    # `.baz.yaml`, `.notes.txt`, `.data.csv` and `.lock.sum` pin the agreement.
     if ($b.StartsWith('.') -and $b.IndexOf('.', 1) -lt 0) { return $false }
     if ($b -match '\.(md|txt|json|yml|yaml|csv|svg|lock|sum)$') { return $false }
     if ($b -clike '*.min.js') { return $false }
@@ -122,14 +132,11 @@ function Test-IsSource([string]$Path) {
     foreach ($d in @('.claude', '.github')) {
         if ($segments.Contains("/$d/")) { return $false }
     }
-    # The per-platform CI wrapper filenames, which live at a repo root. Deliberately
-    # NO tooling/ci/ directory rule: the only framework file there is gate-ci.sh,
-    # already excluded by basename, and a directory rule swallowed a project's own
-    # src/tooling/ci/pipeline.ts -- real source in a directory that merely shares a
-    # name. Excluding a path because it resembles the framework's layout is how a
-    # ratchet stops counting the code it exists for.
-    if ($b -ceq 'azure-pipelines.yml' -or $b -ceq 'bitbucket-pipelines.yml' -or
-        $b -ceq '.gitlab-ci.yml') { return $false }
+    # No per-platform CI wrapper filename rule: every one of them (.gitlab-ci.yml,
+    # azure-pipelines.yml, bitbucket-pipelines.yml) ends in .yml and is already
+    # excluded by the extension test above. The .sh twin carried such a rule
+    # and it was masking a shadowed-`case` bug rather than doing work; both
+    # sides dropped it with that fix.
     if ($p -clike 'docs/*' -or $p -clike 'specs/*') { return $false }
     return $true
 }

@@ -126,11 +126,6 @@ is_source() {  # is_source <path>
         # ratchet. A marker in these files is upstream's prose about deferred work;
         # it was never the project's.
         gate.sh|gate.ps1|gate-ci.sh) return 1 ;;
-        # A leading-dot file with no further extension is configuration, not code.
-        # `.gitignore` counted as source while README.md did not, purely because
-        # this deny-list happened to name one and not the other. A dotfile WITH a
-        # code extension (.eslintrc.js) is still source -- see the case below.
-        .*) case "$_b" in *.*.*) ;; *) return 1 ;; esac ;;
         # Extensions are matched case-INSENSITIVELY (PowerShell's -match is, so the
         # bracket classes are how the .sh agrees with it rather than the other way
         # round -- `README.MD` must not be source on one platform only).
@@ -138,6 +133,24 @@ is_source() {  # is_source <path>
         *.[Yy][Aa][Mm][Ll]|*.[Cc][Ss][Vv]|*.[Ss][Vv][Gg]|\
         *.[Ll][Oo][Cc][Kk]|*.[Ss][Uu][Mm]) return 1 ;;
         *.min.js) return 1 ;;
+    esac
+    # A leading-dot file with no further extension is configuration, not code.
+    # `.gitignore` counted as source while README.md did not, purely because the
+    # deny-list happened to name one and not the other.
+    #
+    # ITS OWN `case`, DELIBERATELY. This test first lived in the block above,
+    # alongside the extension rules -- and a `case` stops at its first matching arm,
+    # so every dotfile matched `.*)` and the block ended before `*.md`, `*.json` or
+    # `*.yml` were ever tested. `.foo.md` classified as SOURCE while `README.md` did
+    # not, along with `.bar.json`, `.baz.yaml`, `.notes.txt`, `.data.csv` and
+    # `.lock.sum`. A per-platform-wrapper filename rule was masking the single
+    # instance anyone had noticed (`.gitlab-ci.yml`) and has been removed with this
+    # fix, because papering over one path of a shadowed rule leaves the shape intact.
+    #
+    # Running AFTER the extension block is what makes both true: an excluded
+    # extension wins, and a dotfile with no extension is still skipped.
+    case "$_b" in
+        .*) case "$_b" in *.*.*) ;; *) return 1 ;; esac ;;
     esac
     is_test_name "$_b" && return 1
     case "/$_p" in
@@ -156,11 +169,6 @@ is_source() {  # is_source <path>
     # swallowed a project's own `src/tooling/ci/pipeline.ts` -- real source, in a
     # directory that merely shares a name. Excluding a path because it resembles the
     # framework's layout is how a ratchet stops counting the code it exists for.
-    # The per-platform CI wrapper filenames, which live at a repo root.
-    case "$_p" in
-        azure-pipelines.yml|bitbucket-pipelines.yml|.gitlab-ci.yml) return 1 ;;
-        */azure-pipelines.yml|*/bitbucket-pipelines.yml|*/.gitlab-ci.yml) return 1 ;;
-    esac
     case "$_p" in
         docs/*|specs/*) return 1 ;;
     esac
