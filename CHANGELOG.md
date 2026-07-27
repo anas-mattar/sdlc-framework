@@ -30,7 +30,7 @@ including detection of local edits that an upgrade would overwrite.
 
 ---
 
-## 2.3.0 (unreleased)
+## 2.3.0
 
 ### The last five findings: globs, quotes, `cp`, trailing dots, and the exemption's scope
 
