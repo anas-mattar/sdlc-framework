@@ -73,10 +73,20 @@ if [ -n "$PY" ]; then
     then ok "settings.json is valid JSON"; else bad "settings.json is not valid JSON"; fi
 
     if $PY -c "import yaml" 2>/dev/null; then
-        if $PY -c "import yaml; yaml.safe_load(open('tooling/ci/gate.yml'))" 2>/dev/null
-        then ok "gate.yml is valid YAML"; else bad "gate.yml is not valid YAML"; fi
+        # Every platform wrapper, not just one. A malformed pipeline file is a
+        # pipeline that does not run, and a pipeline that does not run is a gate
+        # that is not enforcing -- silently, on the one platform nobody tested.
+        yaml_bad=""
+        for y in tooling/ci/*/*.yml tooling/ci/*/.gitlab-ci.yml; do
+            [ -f "$y" ] || continue
+            $PY -c "import yaml,sys; yaml.safe_load(open(sys.argv[1], encoding='utf-8'))" "$y" \
+                2>/dev/null || yaml_bad="$yaml_bad $y"
+        done
+        if [ -z "$yaml_bad" ]
+        then ok "every CI wrapper is valid YAML ($(ls tooling/ci/*/*.yml tooling/ci/*/.gitlab-ci.yml 2>/dev/null | wc -l | tr -d ' ') checked)"
+        else bad "invalid YAML in CI wrapper(s):$yaml_bad"; fi
     else
-        meh "gate.yml YAML check (pyyaml not installed)"
+        meh "CI wrapper YAML check (pyyaml not installed)"
     fi
 else
     meh "JSON/YAML checks (no working python found)"
@@ -237,9 +247,25 @@ TAB=$(printf '\t')
 # Extract every backticked reference that looks like a path -- a known extension,
 # no spaces, no globs, no unfilled placeholders -- in ONE grep pass. Running grep
 # per file cost a fork per file; on Windows that is most of the check's runtime.
+#
+#
+# CHANGELOG.md is excluded, for the same reason the spec-layout scan excludes it:
+# it records what PAST releases said. v2.3.0 replaced `tooling/ci/gate.yml` with a
+# per-platform layout, so every earlier entry naming the old path is now an
+# unresolvable reference -- and editing a released entry to point at a file that
+# did not exist when it shipped is falsification, not consistency. The upgrade
+# tables are load-bearing precisely because they describe the world as it was.
+#
+# HANDOVER.md is excluded on the same principle one step further out: it is not
+# framework documentation at all but an evaluation record, and it has to QUOTE the
+# paths of attacks and of superseded layouts in order to describe them --
+# `src/../package.json` is a path-traversal case the guard correctly blocks, not a
+# file anyone expects to resolve. This check exists to catch broken links in docs a
+# project installs, and a project installs neither of these two files.
 reffile=$(mktemp)
 checked=0
-find . -name "*.md" -not -path "./.git/*" -not -path "./examples/*" -print0 2>/dev/null \
+find . -name "*.md" -not -path "./.git/*" -not -path "./examples/*" \
+       -not -name CHANGELOG.md -not -name HANDOVER.md -print0 2>/dev/null \
     | xargs -0 grep -oHE '`[A-Za-z0-9_][A-Za-z0-9_./-]*\.(md|sh|ps1|json|yml|yaml)`' 2>/dev/null \
     | tr -d '`' | sed "s/:/$TAB/" | sort -u > "$reffile"
 
@@ -365,9 +391,18 @@ fi
 # authoritative process to every project that will never use that tool. These are
 # real and are being driven out, so the baseline is measured, not aspirational --
 # it must only ever fall. Lower it as references are removed; never raise it.
-PRODUCT_BASELINE=13
+#
+# review-process.md is exempt, and only review-process.md. It carries the
+# canonical glossary mapping this framework's neutral terms -- change request,
+# protected-branch rules, code ownership -- onto what each hosting platform calls
+# them. A glossary whose entire job is naming the products cannot be written
+# without naming them, and the same argument already exempts gate-command.md from
+# the exit-code scan and this file from its own layout scan. The exemption is one
+# named file, not a pattern: anywhere else in layer 1, a product name is still a
+# finding.
+PRODUCT_BASELINE=12
 prod_count=$(grep -rniE '\bspec kit\b|\bspec-kit\b|\bfigma\b|\bnotion\b|\bjira\b|\bplaywright\b|\bgithub\b|\bgitlab\b' \
-    process/ 2>/dev/null | wc -l | tr -d ' ')
+    process/ 2>/dev/null | grep -v '^process/core/review-process.md:' | wc -l | tr -d ' ')
 if [ "$prod_count" -le "$PRODUCT_BASELINE" ]; then
     ok "layer 1 named-product references: $prod_count (baseline $PRODUCT_BASELINE)"
     [ "$prod_count" -lt "$PRODUCT_BASELINE" ] && \
@@ -435,9 +470,17 @@ fi
 # This file is excluded from its own scan: the comment above has to name the wrong
 # form in order to explain it, and a rule that cannot state the thing it forbids is
 # a rule nobody can maintain.
+#
+# The placeholder BRACKET matters as much as the path. The first version of this
+# scan matched only the angle-bracket form `specs/<feature>/`, so two documents
+# writing the same wrong layout with SQUARE brackets -- project-rules.md, which is
+# core and therefore installed everywhere, and repository-strategy.md -- sat in the
+# tree reporting `0` while CHANGELOG.md claimed all 33 occurrences were converted.
+# A scan that can only see one way of spelling the mistake certifies the others.
+# Every bracket style a placeholder is plausibly written in is matched here.
 echo "Spec layout"
 layout_scan() {
-    grep -rnE 'specs/<[a-z]|specs/feature/<[a-z]' \
+    grep -rnE 'specs/[<[{(]|specs/feature/[<[{(]' \
         process/ stacks/ modules/ tooling/ tests/ examples/ \
         README.md SETUP.md ADOPTION.md CONTRIBUTING.md CLAUDE.md.template 2>/dev/null \
         | grep -v '^tests/framework-checks.sh:'
@@ -449,6 +492,68 @@ else
     bad "documents disagree on the spec-folder layout ($layout_bad) -- branch-strategy.md is authoritative"
     layout_scan | sed 's/^/          /'
 fi
+
+# --- 7e-ii. Every CI wrapper runs every enforcement step --------------------
+# The gate's logic lives in tooling/ci/gate-ci.sh precisely so four platforms
+# cannot drift apart, and the wrappers are thin by design. The failure that
+# arrangement invites is a wrapper that silently runs five of six steps -- which
+# looks green, reports green, and enforces less than the platform next to it.
+# gate-ci.sh names its own contract via `steps`, so this asserts against the
+# shipped list rather than a copy of it that could go stale here.
+echo "CI wrapper parity"
+CI_STEPS=$(sh tooling/ci/gate-ci.sh steps 2>/dev/null)
+WRAPPERS=$(ls tooling/ci/*/gate.yml tooling/ci/*/.gitlab-ci.yml \
+              tooling/ci/*/azure-pipelines.yml tooling/ci/*/bitbucket-pipelines.yml 2>/dev/null)
+if [ -z "$CI_STEPS" ]; then
+    bad "tooling/ci/gate-ci.sh does not report its steps -- the parity check below cannot run"
+elif [ -z "$WRAPPERS" ]; then
+    bad "no CI wrappers found under tooling/ci/*/ -- every platform is unguarded"
+else
+    n_wrap=$(printf '%s\n' "$WRAPPERS" | grep -c .)
+    n_step=$(printf '%s\n' $CI_STEPS | grep -c .)
+    # Four platforms are supported and named in tooling/ci/README.md. A wrapper
+    # deleted rather than fixed is a platform that quietly stops being supported,
+    # so the COUNT is asserted too, not just the contents of what happens to exist.
+    if [ "$n_wrap" -lt 4 ]; then
+        bad "only $n_wrap CI wrapper(s) present, expected 4 (github, gitlab, azure-devops, bitbucket)"
+    fi
+    wrap_bad=""
+    for w in $WRAPPERS; do
+        for s in $CI_STEPS; do
+            grep -qE "gate-ci\.sh $s( |\$)" "$w" || wrap_bad="$wrap_bad $w:$s"
+        done
+        # A step that runs but is allowed to fail is a step that does not enforce.
+        #
+        # Comment lines are stripped first. Every wrapper carries a comment telling
+        # the reader NOT to add these keys, and the first version of this check
+        # matched those comments -- reporting all three wrappers as broken for
+        # correctly warning against the thing being checked. A scan that cannot
+        # distinguish a setting from a sentence about the setting is not a scan.
+        if grep -v '^[[:space:]]*#' "$w" \
+             | grep -qE 'continue-on-error:[[:space:]]*true|continueOnError:[[:space:]]*true|allow_failure:[[:space:]]*true'
+        then wrap_bad="$wrap_bad $w:allows-failure"; fi
+    done
+    if [ -z "$wrap_bad" ]; then
+        ok "all $n_wrap CI wrappers invoke all $n_step enforcement steps, none allowing failure"
+    else
+        bad "a CI wrapper does not enforce what the others do:"
+        for m in $wrap_bad; do printf '          %s\n' "$m"; done
+    fi
+fi
+
+# Every platform needs its ownership story present -- a file where the platform has
+# one, written instructions where it does not. Bitbucket and Azure DevOps have no
+# CODEOWNERS equivalent at all, and an install that assumes otherwise believes it
+# has a trust anchor outside the perimeter when it has none.
+own_bad=""
+for expect in github/CODEOWNERS gitlab/CODEOWNERS \
+              azure-devops/branch-policy.md bitbucket/default-reviewers.md \
+              README.md gate-ci.sh; do
+    [ -f "tooling/ci/$expect" ] || own_bad="$own_bad $expect"
+done
+if [ -z "$own_bad" ]
+then ok "every platform ships its code-ownership file or its written substitute"
+else bad "tooling/ci is missing:$own_bad"; fi
 
 # --- 7f. The install manifest template stays honest -------------------------
 # The manifest is what lets /framework-upgrade resolve an installed file back to
@@ -471,33 +576,62 @@ elif [ -n "$PY" ]; then
     # Resolve each upstream path, substituting the stack placeholders with the
     # stacks this repo actually ships. A path is satisfied if any substitution
     # resolves: {{BACKEND_STACK}} is filled per project, not here.
+    # BOTH lists. `per_repo_files` is instantiated once per entry in `repos`, and
+    # it exists because `files` used to carry the gate under fixed {{BACKEND_DIR}}
+    # and {{FRONTEND_DIR}} slots while `repos` was an array -- a third repo got no
+    # entry for its gate and the upgrade skipped it silently. A check that reads
+    # only `files` would not have noticed the new list at all.
+    #
+    # Placeholders resolve by SUFFIX rather than by name, so adding a role (a
+    # {{ADMIN_STACK}}) or a platform does not require editing this script:
+    # `*_STACK_FAMILY` is a gate family, `*_STACK` is a folder under stacks/,
+    # `FORGE` is a folder under tooling/ci/, and anything ending `_FILE` is a
+    # filename resolved by globbing its own directory. Anything else belongs to the
+    # installed side and never appears in an upstream path.
     man_bad=$($PY - "$MANIFEST" <<'PYEOF'
-import json, os, sys, glob
-entries = json.load(open(sys.argv[1]))["files"]
+import json, os, re, sys, glob
+doc = json.load(open(sys.argv[1]))
+entries = list(doc.get("files", [])) + list(doc.get("per_repo_files", []))
+if not doc.get("files"):
+    print("files[] is missing or empty")
 stacks = [os.path.basename(p) for p in glob.glob("stacks/*") if os.path.isdir(p)]
+forges = [os.path.basename(p) for p in glob.glob("tooling/ci/*") if os.path.isdir(p)]
+FAMILIES = ("node", "dotnet")
+def expand(path):
+    m = re.search(r"\{\{([A-Z_]+)\}\}", path)
+    if not m:
+        return [path]
+    ph, name = m.group(0), m.group(1)
+    if name.endswith("_STACK_FAMILY"):
+        values = FAMILIES
+    elif name.endswith("_STACK"):
+        values = stacks
+    elif name == "FORGE":
+        values = forges
+    elif name.endswith("_FILE"):
+        # A filename chosen per platform. Resolve it by glob rather than by a list
+        # here: hard-coding the four wrapper names would mean this check goes stale
+        # the moment a platform is added, and a stale check reports a phantom
+        # problem, which is a check people learn to ignore.
+        values = ["*"]
+    else:
+        values = []
+    out = []
+    for v in values:
+        out.extend(expand(path.replace(ph, v)))
+    return out
 missing = []
 for e in entries:
     up = e["upstream"]
-    cands = [up]
-    if "{{" in up:
-        cands = []
-        for s in stacks:
-            c = up
-            for ph in ("{{BACKEND_STACK}}", "{{FRONTEND_STACK}}"):
-                c = c.replace(ph, s)
-            # gate scripts are named by family (node/dotnet), not by stack folder
-            for ph in ("{{BACKEND_STACK_FAMILY}}", "{{FRONTEND_STACK_FAMILY}}"):
-                for fam in ("node", "dotnet"):
-                    cands.append(c.replace(ph, fam))
-            cands.append(c)
-    if not any(os.path.exists(c) for c in cands):
+    cands = expand(up)
+    if not any(glob.glob(c) if "*" in c else os.path.exists(c) for c in cands):
         missing.append(up)
 for m in missing:
     print(m)
 PYEOF
 )
     if [ -z "$man_bad" ]; then
-        ok "every manifest upstream path exists ($($PY -c "import json;print(len(json.load(open('$MANIFEST'))['files']))" 2>/dev/null) entries)"
+        ok "every manifest upstream path exists ($($PY -c "import json;d=json.load(open('$MANIFEST'));print(len(d['files'])+len(d.get('per_repo_files',[])))" 2>/dev/null) entries)"
     else
         bad "manifest names upstream paths that do not exist:"
         printf '%s\n' "$man_bad" | sed 's/^/          /'
@@ -811,8 +945,15 @@ else
         bad "the two stub ratchets disagree on this tree: sh=$cs_sh ps1=$cs_ps"
     fi
 
-    # 2. the same source/skip verdict on every fixture path
-    cs_args=$(grep -v '^[[:space:]]*#' "$STUB_PATHS" | grep -v '^[[:space:]]*$')
+    # 2. the verdict the FIXTURE demands, on every fixture path -- not merely the
+    #    same verdict as each other. Parity is agreement, and two implementations
+    #    gutted together agree perfectly about nothing: emptying `is_source` on
+    #    both sides left this section fully green. The expected verdict is written
+    #    down in tests/fixtures/stub-paths.txt and neither implementation gets a
+    #    vote on it.
+    cs_want="${TMPDIR:-/tmp}/cs-want.$$"
+    grep -v '^[[:space:]]*#' "$STUB_PATHS" | grep -v '^[[:space:]]*$' > "$cs_want"
+    cs_args=$(awk '{ $1 = ""; sub(/^ /, ""); print }' "$cs_want")
     cs_sh_out="${TMPDIR:-/tmp}/cs-cls-sh.$$"
     cs_ps_out="${TMPDIR:-/tmp}/cs-cls-ps.$$"
     # shellcheck disable=SC2086
@@ -822,14 +963,20 @@ else
         2>/dev/null | tr -d '\r' > "$cs_ps_out"
     set +f
     if [ ! -s "$cs_sh_out" ] || [ ! -s "$cs_ps_out" ]; then
-        bad "one of the stub ratchets classified nothing -- is $STUB_PATHS still one path per line?"
-    elif diff "$cs_sh_out" "$cs_ps_out" >/dev/null 2>&1; then
-        ok "check-stubs.sh and .ps1 classify all $(grep -c '' "$cs_sh_out" | tr -d ' ') fixture paths the same way"
+        bad "one of the stub ratchets classified nothing -- is $STUB_PATHS still '<verdict> <path>' per line?"
     else
-        bad "the two stub ratchets disagree about which paths are source:"
-        diff "$cs_sh_out" "$cs_ps_out" | sed 's/^/          /'
+        cls_bad=""
+        diff "$cs_want" "$cs_sh_out" >/dev/null 2>&1 || cls_bad="check-stubs.sh"
+        diff "$cs_want" "$cs_ps_out" >/dev/null 2>&1 || cls_bad="${cls_bad:+$cls_bad and }check-stubs.ps1"
+        if [ -z "$cls_bad" ]; then
+            ok "both stub ratchets return the fixture's verdict for all $(grep -c '' "$cs_want" | tr -d ' ') paths"
+        else
+            bad "$cls_bad disagrees with the verdict written in $STUB_PATHS:"
+            diff "$cs_want" "$cs_sh_out" | sed 's/^/          sh:  /'
+            diff "$cs_want" "$cs_ps_out" | sed 's/^/          ps1: /'
+        fi
     fi
-    rm -f "$cs_sh_out" "$cs_ps_out"
+    rm -f "$cs_sh_out" "$cs_ps_out" "$cs_want"
 
     # 3. the same LINES of the same file. Compare `path:lineno` only -- the line
     #    text carries CR on a Windows checkout and that is not a disagreement.
@@ -847,6 +994,192 @@ else
         diff "${TMPDIR:-/tmp}/cs-ln-sh.$$" "${TMPDIR:-/tmp}/cs-ln-ps.$$" | sed 's/^/          /'
         rm -f "${TMPDIR:-/tmp}/cs-ln-sh.$$" "${TMPDIR:-/tmp}/cs-ln-ps.$$"
     fi
+fi
+
+# --- 11b-ii. verify-guard's own verdicts ------------------------------------
+# The fixture two checks up proves the GUARDS block. Nothing proved that
+# verify-guard NOTICES when they stop, and that is the script a consuming project
+# is left alone with: the 99-case fixture lives here, not there. Three defects
+# lived in exactly that gap --
+#
+#   * it ran seven cases, none of them the install guard's perimeter, so deleting
+#     that entire block and changing nothing else produced GUARD: verified;
+#   * it sampled 5 of 56 install commands and 15 of 86 manifest patterns, so the
+#     lists could be cut by ~85% and still verify;
+#   * on Linux and macOS -- the SHIPPED DEFAULT, because settings.json names
+#     PowerShell -- it silently tested the .sh twin and reported the configured
+#     .ps1 hooks as verified while they were `exit 0`.
+#
+# COST. Each run spawns a shell per case: about four seconds on Linux, where CI
+# runs, and over a minute under MSYS. That is the same fork-and-pipe tax the
+# verifier's own header documents, and it is paid here deliberately -- these three
+# assertions are the only thing standing between a future edit and a verifier that
+# certifies whatever it is pointed at.
+echo "verify-guard verdicts"
+vg="${TMPDIR:-/tmp}/sdlc-vg.$$"
+rm -rf "$vg"
+mkdir -p "$vg/.claude/hooks"
+cp tooling/claude/hooks/*.sh tooling/claude/hooks/*.ps1 "$vg/.claude/hooks/" 2>/dev/null
+# An install configured for THIS platform: the POSIX hooks, named as SETUP tells
+# a macOS/Linux user to name them.
+sed 's|powershell -NoProfile -File \(\.claude/hooks/guard-[a-z]*\)\.ps1|sh \1.sh|' \
+    tooling/claude/settings.json > "$vg/.claude/settings.json"
+
+vg_run() {  # vg_run -> sets VG_RC and leaves output in $vg/out.txt
+    ( cd "$vg" && sh .claude/hooks/verify-guard.sh > out.txt 2>&1 )
+    VG_RC=$?
+}
+
+if ! grep -q 'sh \.claude/hooks/guard-packages\.sh' "$vg/.claude/settings.json"; then
+    bad "could not build a POSIX-configured scratch install -- has settings.json's hook command changed shape?"
+else
+    vg_run
+    if [ "$VG_RC" = 0 ] && grep -q 'GUARD: verified' "$vg/out.txt"; then
+        ok "verify-guard verifies a correctly configured install (exit 0)"
+    else
+        bad "verify-guard rejected a correct install (exit $VG_RC):"
+        sed 's/^/          /' "$vg/out.txt"
+    fi
+
+    # The configured interpreter is absent and a twin exists. Every case still
+    # passes -- against the WRONG SCRIPT -- and that must not read as success.
+    sed -i.bak 's|"sh \.claude/hooks/guard-|"nosuchshell .claude/hooks/guard-|g; s|guard-\([a-z]*\)\.sh"|guard-\1.ps1"|g' \
+        "$vg/.claude/settings.json" 2>/dev/null || \
+        sed 's|"sh \.claude/hooks/guard-|"nosuchshell .claude/hooks/guard-|g; s|guard-\([a-z]*\)\.sh"|guard-\1.ps1"|g' \
+            "$vg/.claude/settings.json.bak" > "$vg/.claude/settings.json"
+    vg_run
+    if [ "$VG_RC" = 3 ] && grep -q 'partially verified' "$vg/out.txt"; then
+        ok "verify-guard refuses to say 'verified' when it tested the twin (exit 3)"
+    else
+        bad "verify-guard reported exit $VG_RC for an install whose configured hooks it never ran:"
+        sed 's/^/          /' "$vg/out.txt"
+    fi
+
+    # Back to a correct configuration, then break the guard underneath it: the
+    # perimeter block neutralised, and the install list cut to five entries.
+    cp "$vg/.claude/settings.json.bak" "$vg/.claude/settings.json" 2>/dev/null
+    gi="$vg/.claude/hooks/guard-installs.sh"
+    awk '
+        /^if \[ -n "\$perimeter_hit" \]; then$/ && !done_p { print "perimeter_hit=\"\""; done_p = 1 }
+        /^INSTALL_COMMANDS="npm install$/ { print "INSTALL_COMMANDS=\"npm install"; cut = 1; next }
+        cut && /^dart pub add"$/ { print "go get\""; cut = 0; next }
+        cut { next }
+        { print }
+    ' "$gi" > "$gi.new" && mv "$gi.new" "$gi"
+    vg_run
+    if [ "$VG_RC" = 1 ] &&
+       grep -q 'FAIL  creating the approval marker' "$vg/out.txt" &&
+       grep -q 'FAIL  install-command list' "$vg/out.txt"; then
+        ok "verify-guard fails on a gutted perimeter and a gutted list (exit 1)"
+    else
+        bad "verify-guard reported exit $VG_RC for a guard with no perimeter and a five-entry list:"
+        sed 's/^/          /' "$vg/out.txt"
+    fi
+fi
+rm -rf "$vg"
+
+# --- 11c. Both ratchets count a PLANTED number ------------------------------
+# Everything above is relative: the two implementations are compared to each
+# other, or to a verdict about a path. Neither says what the ratchet's own
+# arithmetic produces on a real tree, and that is where it broke. `count_stubs`
+# returned the two-line string "0\n0" on any tree with NO markers -- the state
+# every project adopting the ratchet on a clean codebase starts in -- because
+# `grep -c` prints 0 AND exits 1, so the `|| echo 0` fallback fired as well.
+# Nothing in the suite could see it: this repository's own tree has markers in it,
+# so the zero case never arose here.
+#
+# So: a scratch repository, a known number of markers, and the number asserted.
+# The tree also carries the enumeration cases that cannot be written as
+# classification fixtures -- a path with a space, a non-ASCII path, and a file
+# named like a grep option.
+echo "Stub ratchet count"
+REPO=$(pwd)
+plant="${TMPDIR:-/tmp}/sdlc-stub-plant.$$"
+rm -rf "$plant"
+if ! (mkdir -p "$plant/src" && cd "$plant" && git init -q . 2>/dev/null); then
+    meh "planted stub count (could not create a scratch repository)"
+else
+    # 2 counted: the third marker carries a reason, so it is exempt.
+    printf '// TODO: one\n// FIXME: two\n// HACK: three approved-stub: deferred to phase 4\n' \
+        > "$plant/src/a.ts"
+    # 1 counted: `latest-ledger` contains `test` as a SUBSTRING, and the ratchet
+    # used to skip the whole file for that reason alone.
+    printf '// TODO: renamed away from the ratchet\n' > "$plant/src/latest-ledger.ts"
+    # 0 counted: a test file and a document.
+    printf '// TODO: a note about a test\n' > "$plant/src/b.test.ts"
+    printf 'TODO: prose about future work\n'  > "$plant/README.md"
+    want=3
+
+    # A filename that looks like a grep option. `grep -nHE "$MARKERS" $files` with
+    # no `--` turned this into a flag: with `-q` in the tree the count fell to
+    # zero, silently, on the .sh side only.
+    if (cd "$plant" && touch -- -q 2>/dev/null) && [ -f "$plant/-q" ]; then
+        printf '// TODO: not counted, this file is empty of source\n' > "$plant/-q.ts"
+        want=$((want + 1))
+    else
+        printf '        note: could not create a file named -q on this filesystem\n'
+    fi
+    # A path with a space: the old `for f in $(git ls-files)` word-split it.
+    printf '// TODO: spaced\n' > "$plant/src/my file.ts" 2>/dev/null \
+        && want=$((want + 1)) \
+        || printf '        note: could not create a path containing a space\n'
+    # A non-ASCII path: git's default core.quotePath=true rendered it as a quoted
+    # C string, which is not the name of any file, and BOTH implementations then
+    # skipped it in silence.
+    utf8=$(printf 'src/caf\303\251.ts')
+    printf '// TODO: accented\n' > "$plant/$utf8" 2>/dev/null
+    if [ -f "$plant/$utf8" ]; then want=$((want + 1))
+    else printf '        note: could not create a non-ASCII path on this filesystem\n'; fi
+
+    got=$(cd "$plant" && sh "$REPO/tooling/gate/check-stubs.sh" --count 2>/dev/null)
+    if [ "$got" = "$want" ]; then
+        ok "check-stubs.sh counts the planted $want markers"
+    else
+        bad "check-stubs.sh counted [$got] on a tree planted with $want markers"
+    fi
+
+    # The zero case, on its own, because it is the one that was broken and the one
+    # every new adopter starts in.
+    rm -rf "$plant/src" "$plant/README.md" "$plant/-q.ts"
+    printf 'const answer = 42;\n' > "$plant/clean.ts"
+    zero=$(cd "$plant" && sh "$REPO/tooling/gate/check-stubs.sh" --count 2>/dev/null)
+    if [ "$zero" = "0" ]; then
+        ok "check-stubs.sh counts 0 on a tree with no markers at all"
+    else
+        bad "check-stubs.sh counted [$zero] on a tree with no markers -- expected exactly 0"
+    fi
+
+    # ...and the baseline it writes from that count has to be a number the next
+    # run can read back. `--baseline` wrote the corrupt two-line value straight
+    # into the pinned file.
+    (cd "$plant" && sh "$REPO/tooling/gate/check-stubs.sh" --baseline >/dev/null 2>&1)
+    bl=$(tr -d ' \r\n' < "$plant/.gate-stubs-baseline" 2>/dev/null)
+    case "$bl" in
+        ''|*[!0-9]*) bad "--baseline wrote something that is not a number: [$bl]" ;;
+        *) if (cd "$plant" && sh "$REPO/tooling/gate/check-stubs.sh" >/dev/null 2>&1)
+           then ok "--baseline on a zero-stub tree writes a baseline the ratchet accepts"
+           else bad "the ratchet rejects the baseline --baseline just wrote"; fi ;;
+    esac
+
+    if command -v pwsh >/dev/null 2>&1; then
+        pgot=$(cd "$plant" && pwsh -NoProfile -File "$REPO/tooling/gate/check-stubs.ps1" -Count 2>/dev/null | tr -d ' \r\n')
+        if [ "$pgot" = "0" ]; then
+            ok "check-stubs.ps1 counts 0 on the same tree"
+        else
+            bad "check-stubs.ps1 counted [$pgot] on a tree with no markers"
+        fi
+        # Same count, same bytes: .gate-stubs-baseline is PINNED, so a Windows
+        # developer re-baselining at an unchanged number must not change its hash.
+        sh_sum=$(sha256sum "$plant/.gate-stubs-baseline" | cut -d' ' -f1)
+        (cd "$plant" && pwsh -NoProfile -File "$REPO/tooling/gate/check-stubs.ps1" -Baseline >/dev/null 2>&1)
+        ps_sum=$(sha256sum "$plant/.gate-stubs-baseline" | cut -d' ' -f1)
+        if [ "$sh_sum" = "$ps_sum" ]; then
+            ok "--baseline and -Baseline write byte-identical files"
+        else
+            bad "--baseline and -Baseline write different bytes for the same count -- the pin will report the gate as weakened on a no-op"
+        fi
+    fi
+    rm -rf "$plant"
 fi
 
 # --- 12. All four gate scripts exclude the same paths ----------------------

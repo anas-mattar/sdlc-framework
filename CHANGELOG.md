@@ -32,6 +32,90 @@ including detection of local edits that an upgrade would overwrite.
 
 ## 2.3.0 (unreleased)
 
+### Four hosting platforms, and the CI gate becomes a script
+
+**Breaking: `tooling/ci/gate.yml` and `tooling/ci/CODEOWNERS` are gone.** CI was
+GitHub-only in a framework whose stated goal is tool-neutral principles. GitLab,
+Azure DevOps and Bitbucket are now supported alongside it.
+
+The gate's six enforcement steps moved out of the workflow YAML into
+**`tooling/ci/gate-ci.sh`**, and each platform gets a thin wrapper that invokes
+them. This is not a refactor for tidiness. Porting a 250-line exceptions parser
+that has had five separate bugs into four YAML dialects would have created four
+twins to keep in sync, and this framework's entire defect history is twins that
+stopped agreeing in the copy nobody brought along. One script, four wrappers, and a
+self-test that asserts every wrapper invokes every step.
+
+New layout:
+
+```
+tooling/ci/gate-ci.sh                            the checks (installed everywhere)
+tooling/ci/README.md                             the platform matrix
+tooling/ci/github/{gate.yml,CODEOWNERS}
+tooling/ci/gitlab/{.gitlab-ci.yml,CODEOWNERS}    CODEOWNERS is Premium-only
+tooling/ci/azure-devops/{azure-pipelines.yml,branch-policy.md}
+tooling/ci/bitbucket/{bitbucket-pipelines.yml,default-reviewers.md}
+```
+
+**Ownership is not equal across platforms, and the docs now say so.** GitHub and
+GitLab Premium have a tracked, diffable `CODEOWNERS`. Azure DevOps and Bitbucket
+have portal configuration that git cannot see and that leaves no trace when it
+changes; GitLab Free enforces nothing at all while still parsing the file. Each
+carries its own file explaining what you do and do not get, and `CLAUDE.md` gains a
+`Perimeter ownership:` line whose accepted value includes `UNOWNED` — because a
+documented gap gets budgeted for and an undocumented one gets trusted past.
+
+**Layer 1 no longer names a vendor.** `docs/process/review-process.md` holds the
+canonical glossary: *change request* (pull request, or merge request on GitLab),
+*protected-branch rules*, *code ownership*. Definition of Done item 6 stopped
+hardcoding `gh pr view` and now reads the command from `CLAUDE.md` — a checklist
+naming one vendor's CLI cannot be satisfied honestly on any other platform. The
+per-platform commands are tabulated in `tooling/ci/README.md`.
+
+**Three findings fixed because they lived in the code being rewritten**, rather
+than being left to propagate into four new files:
+
+- The pin's coverage test accepted `$2` of any line while `sha256sum -c` skips
+  `#`-comments silently, so a `.gate-sha256` naming every pinned file **as a
+  comment**, plus one real hash for `README.md`, passed both halves at once with
+  `gate.sh` set to `exit 0`. The naming line now requires a 64-hex digest, and the
+  count of lines verified must equal the count of non-blank lines present.
+- `bound` was tracked per file while rows of a deadline-less table were skipped, so
+  **one decoy table** with a satisfied date disabled the overdue check for every
+  other table in the file.
+- **Emptying `docs/exceptions.md` of its rows** erased every open exception exactly
+  as deleting the file did, for one edit less, and only the file deletion was
+  caught. `exceptions.md` documented the hole as intended behaviour; it no longer
+  does.
+
+**`/phase-done` gained the multi-repo receipt rule.** A receipt is a `git
+write-tree` over one repository, so on the wrapper pattern a sub-repo receipt says
+nothing about a `tasks.md` in the wrapper. `repository-strategy.md` now states the
+rule — one receipt per repo touched, the wrapper committed first, its tree clean at
+phase close, its HEAD recorded in `status.md` — and states plainly what that does
+not close.
+
+**Also:** `specs/[feature-name]/` in `project-rules.md` and
+`repository-strategy.md` were the last two documents on the pre-2.3.0 spec layout;
+the scan that should have caught them matched only angle brackets, so it reported
+`0` while the CHANGELOG claimed all 33 occurrences were converted.
+
+**Upgrade actions**
+
+| Action | What |
+|---|---|
+| **Delete** | `.github/workflows/gate.yml`, `.github/CODEOWNERS` — replaced below |
+| **Install** | `tooling/ci/gate-ci.sh` into **every code repo**, at `tooling/ci/gate-ci.sh` |
+| **Install** | your platform's wrapper — see the table in `tooling/ci/README.md` |
+| **Install** | your platform's ownership file, or read its `.md` and configure the portal |
+| **Re-copy** | `process/core/` — `review-process.md` (new glossary), `definition-of-done.md`, `exceptions.md`, `gate-command.md`, `branch-strategy.md`, `project-rules.md` |
+| **Re-copy** | `process/optional/repository-strategy.md` if multi-repo — new receipt rule |
+| **Re-copy** | `process/team/team-workflow.md`, `tooling/claude/commands/` |
+| **Merge** | `CLAUDE.md` — add `Hosting platform:`, `Review evidence:`, `Perimeter ownership:` |
+| **Merge** | `.claude/framework-manifest.json` — add `forge` and `review_evidence_cmd`; **move the CI entries into `per_repo_files[]`** (they were installed once per project, so a multi-repo project got one pipeline for whichever repo came first) |
+| **Check by hand, once** | `docs/exceptions.md` — if you ever closed an exception by deleting its rows, CI now fails until they are restored and struck through |
+| **Check by hand, once** | that the check is *mandatory*, not merely defined. No platform does this from the pipeline file: branch protection (GitHub), Pipelines must succeed (GitLab), a Build Validation policy (Azure DevOps), minimum successful builds (Bitbucket) |
+
 **Fail-closed release.** Four controls reported success while doing nothing. Each
 was a place where the framework wrote prose and skipped the mechanism — the exact
 failure its own first design principle warns against — so the fixes come with the
@@ -55,7 +139,7 @@ file guard never saw, so a project could run reporting `GUARD: verified` with
 every real install path open. `guard-installs.sh` / `.ps1` closes it: 56 command
 forms, the same approval marker, the same exit codes.
 
-### Self-tests: 34 assertions -> 91, across four suites
+### Self-tests: 34 assertions -> 107, across four suites
 
 The suite passed while examining almost nothing. Each of these is a check that
 now tests what the README already claimed it tested:
@@ -84,15 +168,17 @@ now tests what the README already claimed it tested:
   gate evidence. This is what let a MANDATORY stack checklist keep saying
   "confirmed exit code 0" for two releases after v2.0.0 removed it.
 - **The CI exceptions step had no tests at all.** New `tests/exceptions-check.sh`:
-  21 cases, and the awk program is extracted from the shipped `gate.yml` between
-  marker comments rather than copied, so a test cannot go on passing after the
-  code it covers has drifted.
+  29 cases. Both the awk program and the whole `run:` block are extracted from the
+  shipped `gate.yml` between marker comments rather than copied, so a test cannot
+  go on passing after the code it covers has drifted — and the step's exit
+  status is asserted, not just what its awk prints.
 - **The `.ps1` parity checks now FAIL in CI when `pwsh` is missing** rather than
   skipping. "must not skip in CI" was in the message and nowhere in the code, so
   the whole parity guarantee rested on `ubuntu-latest` continuing to ship it.
 - **The stub ratchet is compared behaviourally**, not by its constants — same
-  count on the tree, same source/skip verdict on 46 fixture paths, same flagged
-  lines in one fixture file.
+  count on the tree, the verdict the fixture demands on 58 fixture paths, same
+  flagged lines in one fixture file, and a planted count on a scratch repository
+  so the arithmetic itself is asserted and not merely agreed upon.
 
 ### `verify-guard` was blind to the wiring
 
@@ -643,6 +729,88 @@ stop checking the others.
   tier, which ships no `plan.md`.
 - Warehouse-project vocabulary removed from `gate-dotnet.sh` and `gotchas.md`.
 
+### The newest controls carried the newest bugs
+
+The round-four review found every earlier fix holding and the defects concentrated
+in the two controls added last — the ones with the least coverage behind them.
+
+- **The stub counter returned `"0\n0"` on any tree with no markers.** `grep -c`
+  prints `0` *and exits 1* when nothing matches, so the `|| echo 0` fallback fired
+  as well. That is the state every project adopting the ratchet on a clean
+  codebase starts in: `--baseline` wrote a corrupt two-line value into the
+  **pinned** baseline file, every comparison then died with `Illegal number`, and
+  because a failed `[` is false the script fell through to `exit 0` — the ratchet
+  passing inertly. Now `wc -l`, which exits 0 on empty input, plus a self-test
+  that plants a known count on a scratch repository and asserts the number.
+- **A repository file named `-q` silently zeroed the ratchet.** Tracked paths went
+  to `grep` with no `--`, so a filename that looks like an option became one:
+  `-q` and `-e` took the count to zero, `-i` re-enabled the case-insensitive
+  matching this pair was rewritten to remove, and `*.ts` triggered pathname
+  expansion. Enumeration is now NUL-delimited with an option terminator, which
+  closes the space-in-path and non-ASCII gaps in the same edit — `git`'s default
+  `core.quotePath=true` rendered `src/café.ts` as a quoted C string that matches no
+  file, so **both** implementations skipped it in silence, and `mv ledger.ts
+  lédger.ts` removed its markers on every platform with no message.
+- **`verify-guard` certified a guard whose entire perimeter block had been
+  deleted.** The file guard's self-protection was tested; the install guard's was
+  not. It now runs the perimeter cases — the approval marker, a hook deletion,
+  `sed -i` on the configuration, a redirection, a read-before-write, `rm -rf
+  .claude` — and the reads that must still pass.
+- **`verify-guard` said `verified` when it had tested a different file.** On Linux
+  and macOS the shipped `settings.json` names `powershell`, which is not there, so
+  the verifier fell back to the `.sh` sibling — the shipped default state, not an
+  attack. Replacing both `.ps1` hooks with `exit 0` produced `GUARD: verified` and
+  a green CI step. It now prints `GUARD: partially verified` and exits **3**, and
+  the CI step fails on it and explains why.
+- **The guard lists could be cut by ~85% and still verify.** Reduced to exactly
+  the five commands the verifier tested, `npx`, `pnpm add`, `cargo add`, `bun
+  install`, `gem install` and `composer require` all returned 0. The verifiers now
+  assert a floor on each list's size and sample across it rather than from its
+  front.
+- **`cp -t DIR SRC` wrote into the perimeter** on both implementations: the
+  destination is named by an option, so the last-argument test read a source file.
+  `awk` left the read allowlist when `-i` is present — gawk's `-i inplace` writes.
+- **`test` was matched as a substring, so a rename defeated the ratchet.**
+  `git mv src/ledger.ts src/latest-ledger.ts` took the count from 1 to 0, as did
+  `protest.go`, `contest.rb`, `Greatest.cs` and `attestation.ts`. The basename is
+  now split into tokens and `test`/`spec` must *be* one, or end one in CamelCase.
+- **Non-string and duplicated JSON values.** `{"command":["npm","install","x"]}`
+  was allowed by the `.sh` hook and blocked by the `.ps1`; duplicate keys were
+  read first-wins by one and last-wins by the other, so each failed open in one
+  direction. Both now fail closed on a value they cannot read as a string, and
+  both take the last of a duplicated key — which is what the JSON parser Claude
+  Code itself uses does.
+- **Options between a tool and its subcommand.** `npm --silent install left-pad`,
+  `npm --prefix ./app install x`, `npm -g install x`, `yarn --cwd app add zod`,
+  `/usr/local/bin/npm install x` and `npm.cmd install x` are documented
+  invocations, and all six were allowed. Matching now also runs over normalised
+  copies with options, directory prefixes and Windows executable suffixes removed.
+- **`--baseline` and `-Baseline` wrote different bytes** for the same count — and
+  the baseline is pinned, so a Windows developer re-baselining at an unchanged
+  number tripped `CHANGED: … the gate has been weakened`. A control that cries
+  wolf on a no-op is one people learn to regenerate reflexively.
+- **The pin now names the `.ps1` halves.** The install guard leaves `gate.*` and
+  `check-stubs.*` outside its perimeter *on the grounds that CI pins them*; the
+  pin named only the POSIX halves, so the ratchet a Windows developer runs was
+  editable in silence. Each file is required only if it exists.
+- **The manifest no longer hardcodes two repos.** `repos` is an array and
+  `$comment_stacks` says there is no limit of two, but the gate and stub ratchet
+  sat in fixed `{{BACKEND_DIR}}`/`{{FRONTEND_DIR}}` slots, so a third repo got no
+  entry and `/framework-upgrade` skipped its gate silently. Those entries move to
+  `per_repo_files[]`, expanded once per repo. `process/optional/` is three
+  independently-installed files and is now listed as three.
+- **The exceptions suite tested the awk and not the step.** Changing `exit 1` to
+  `exit 0` in the surrounding `run:` block left all 21 assertions green while an
+  overdue exception stopped failing CI. The whole block is now extracted and
+  executed, with its exit status asserted.
+- **Parity is not correctness.** Gutting `is_source` in *both* implementations so
+  that nothing was classified as source left the suite fully green — two
+  implementations agreeing perfectly about nothing. The classification fixture now
+  carries the verdict each path must receive, and neither implementation gets a
+  vote on it.
+- `is_source` assigned bare `p=`/`b=` with no locals and clobbered its caller's
+  loop variable, so `--classify` could name the wrong path in a failure message.
+
 ### Upgrade actions
 
 | File | Action |
@@ -655,13 +823,13 @@ stop checking the others.
 | `process/core/exceptions.md` | **Install** — new, part of `core/`. Create `docs/exceptions.md` only when you first need one. |
 | `tooling/gate/gate-node.sh`, `.ps1` | **Merge** — now ships `{{PLACEHOLDER}}`s. Keep your commands; take the other hunks. |
 | `tooling/claude/hooks/guard-packages.sh`, `.ps1` | **Copy** |
-| `tooling/ci/gate.yml` | **Merge** — you uncommented a toolchain block. Take the `checkout` (`fetch-depth: 0`), `Pin the gate`, `No overdue exceptions` and `The package guards actually block` hunks; keep your toolchain. Then **regenerate `.gate-sha256`**: the pin step now requires it to name `gate.sh`, `check-stubs.sh` and `.gate-stubs-baseline`, and a pin that names only `gate.sh` fails with `UNPINNED`. |
-| `.gate-sha256` | **Regenerate** — `sha256sum gate.sh check-stubs.sh .gate-stubs-baseline > .gate-sha256` from each repo root. Add `gate.ps1` if your team runs the PowerShell gate. |
+| `tooling/ci/gate.yml` | **Merge** — you uncommented a toolchain block. Take the `checkout` (`fetch-depth: 0`), `Pin the gate`, `No overdue exceptions` and `The package guards actually block` hunks; keep your toolchain. Then **regenerate `.gate-sha256`**: the pin step now requires it to name every one of `gate.sh`, `gate.ps1`, `check-stubs.sh`, `check-stubs.ps1` and `.gate-stubs-baseline` that exists, and a pin that names only `gate.sh` fails with `UNPINNED`. |
+| `.gate-sha256` | **Regenerate** — `sha256sum gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 .gate-stubs-baseline > .gate-sha256` from each repo root, dropping any of those files this repo does not have. The pin step requires every one that **exists** to be named. |
 | `.github/CODEOWNERS` | **Merge** — add `/check-stubs.sh`, `/check-stubs.ps1` and `/.gate-stubs-baseline`, and replace `/docs/stack-backend/` and `/docs/stack-frontend/` with `/docs/stacks/`. Those two lines have matched nothing since 2.3.0 renamed the stack folders, and GitHub ignores a CODEOWNERS path that matches no files **in silence** — so layer 2 has been unowned in every project that believed it was covered. |
 | `docs/exceptions.md` | **Check by hand, once.** The check is stricter in four ways and each one used to pass silently: the deadline header must be exactly *Remediate by* or *Due by* (a *Remediation notes* column no longer wins), every row must be as wide as its header, the date must be a real calendar date, and each table binds its own column. If you have an open exceptions table, re-read it against `docs/process/exceptions.md` before your next PR. |
 | `tooling/claude/hooks/verify-guard.sh`, `.ps1` | **Copy** — then re-run it; a project that installed only the file guard fails here, which is the point. |
 | `tooling/claude/settings.json` | **Merge** — you edited the allowlist. The `PreToolUse` matcher widens to `Edit\|MultiEdit\|Write\|NotebookEdit` and a second `Bash` entry is added for `guard-installs`. Delete any `PowerShell(...)` allow entry: Claude Code has no PowerShell tool, so the entry matched nothing and the prompt it was meant to suppress appeared anyway. A `.ps1` gate is run through `Bash(pwsh -File ./gate.ps1 -Verify)`. |
-| `tooling/claude/framework-manifest.template.json` | **Merge** — you filled it in. Add the entry for the manifest itself, and the `{{FRONTEND_DIR}}` entries for `check-stubs.*`; without them the upgrade cannot resolve its own record, or the ratchet in a second repo. |
+| `tooling/claude/framework-manifest.template.json` | **Merge** — you filled it in. Add the entry for the manifest itself; move the gate and `check-stubs.*` entries out of the fixed `{{BACKEND_DIR}}`/`{{FRONTEND_DIR}}` slots into `per_repo_files[]`, which is expanded once per entry in `repos[]`; and split `process/optional/` into one entry per file you installed. |
 | `CONTRIBUTING.md` | **None** — upstream only; adds the canonical-locations table. |
 | `process/*` | **Breaking — re-copy per bucket.** Layer 1 moved to `process/core|team|optional/` upstream. Installed layout is unchanged (flat `docs/process/`), so re-copy `core/` plus whichever of `team/`, `optional/*` your answers earn, and **delete the installed files you no longer earn**. |
 | `docs/stack-backend/`, `docs/stack-frontend/` | **Breaking — rename.** `git mv docs/stack-backend docs/stacks/<name>` per stack, keeping the upstream folder name, then update `CLAUDE.md` and the manifest's `stacks` map. |

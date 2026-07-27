@@ -83,16 +83,47 @@ Check each item and collect evidence. The numbering matches
    A ticked `human-pr-review.md` is **not** evidence. That file lives in the
    repository, you can write it, and the receipt contract deliberately does not
    fingerprint it — so its contents are exactly as trustworthy as your own report.
-   The evidence is outside the tree:
+   The evidence is outside the tree, and the command is the one recorded on the
+   `Review evidence:` line of `CLAUDE.md` — it differs per hosting platform, so do
+   not assume a vendor's CLI is installed. If that line is missing or still holds a
+   placeholder, say so: the project never chose its evidence, which is itself a
+   finding worth reporting rather than working around.
+
+   The everywhere-fallback is a signed trailer on the phase commit:
 
    ```
-   gh pr view --json reviews --jq '[.reviews[] | select(.state=="APPROVED") | .author.login]'
+   git log -1 --format='%(trailers:key=Reviewed-by,valueonly)' <phase commit>
    ```
 
-   If `gh` is unavailable, a signed `Reviewed-by:` trailer on the phase commit is
-   the fallback. With neither, item 6 is **PENDING** — which is the normal and
-   correct state at `/phase-done` time, since review follows the commit. Report it
-   as pending with the reason; never report it as satisfied because a file says so.
+   With neither, item 6 is **PENDING** — which is the normal and correct state at
+   `/phase-done` time, since review follows the commit. Report it as pending with
+   the reason; never report it as satisfied because a file says so.
+
+## Multi-repo projects — two extra checks
+
+Skip this section entirely if `docs/process/repository-strategy.md` is not
+installed; a single-repo project has nothing here to check.
+
+A receipt is a `git write-tree` over **one** repository, and the wrapper pattern
+puts the requirements (`tasks.md`, `spec.md`) in the wrapper while the code sits in
+a sub-repo. So item 3's guarantee — *the requirements have not moved since the gate
+ran* — holds inside each repository and not across the boundary between them. Two
+things close as much of that as is closable:
+
+7. **One valid receipt per repository this phase changed.** Check each of them
+   independently. A phase touching backend and frontend with one valid receipt is
+   **not** past item 3; say which repo is unproven.
+8. **The wrapper's tree must be clean.** Run `git status --porcelain` at the
+   wrapper root. Any output means a spec or task file may have changed after the
+   gates ran, which is exactly the condition a receipt detects in-repo and cannot
+   detect across repos. Report it as a FAIL on item 3 and name the dirty paths.
+
+Then record what the receipts were measured against: write the wrapper's
+`git rev-parse HEAD` into the phase's `status.md` next to each repo's receipt
+verdict. `status.md` is outside every fingerprint, so writing it stales nothing.
+This does not prevent a later wrapper commit from rewriting `tasks.md` — nothing
+short of one repository would — but it turns "which specs was this built from" into
+a SHA a reviewer can check out.
 
 ## Verdict
 

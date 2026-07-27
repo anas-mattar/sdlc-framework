@@ -61,7 +61,13 @@ powershell -NoProfile -File .claude/hooks/verify-guard.ps1
 ```
 (or `sh .claude/hooks/verify-guard.sh` on macOS/Linux)
 
-Only `GUARD: verified` is a PASS, and it now covers **two** hooks: the file guard
+Only `GUARD: verified` (exit 0) is a PASS. `GUARD: partially verified` (exit 3) is
+a **FAIL**: the configured interpreter is not on this machine, so the verifier
+tested the sibling script instead and the hook Claude Code actually invokes has not
+been exercised at all. Report it as "the guards are unverified on this machine" and
+give the fix the verifier prints — an unrunnable hook command fails open.
+
+The check covers **two** hooks: the file guard
 on `Edit|MultiEdit|Write|NotebookEdit`, and the install guard on `Bash`. A project
 upgraded from before v2.3.0 will most often fail here with *no PreToolUse hook
 matches Bash* — the file guard alone never sees `npm i`, `dotnet add package`,
@@ -78,15 +84,50 @@ disables the guard permanently.
 
 ### 6. CI gate present
 
-`.github/workflows/gate.yml` exists, invokes the repo's own gate script, and has
-no `continue-on-error`. Report whether the check is required on `main` as
-**unverifiable locally** — the user must confirm it in branch protection. Applies
-to solo projects too (`SETUP.md` Q5).
+Read `forge` from `.claude/framework-manifest.json` and check the pipeline file for
+**that** platform — not `.github/workflows/`, which only exists on one of the four:
+
+| `forge` | Pipeline file |
+|---|---|
+| `github` | `.github/workflows/gate.yml` |
+| `gitlab` | `.gitlab-ci.yml` |
+| `azure-devops` | `azure-pipelines.yml` |
+| `bitbucket` | `bitbucket-pipelines.yml` |
+
+Then check all four of these, per repo in `repos[]`:
+
+1. **`tooling/ci/gate-ci.sh` exists.** The wrapper is thin and every check lives in
+   the script. A repo with the wrapper and no script has a pipeline that cannot run.
+2. **The wrapper invokes every step the script declares.** Run
+   `sh tooling/ci/gate-ci.sh steps` and confirm each name appears in the wrapper. A
+   wrapper running five of six steps looks green and enforces less than the
+   platform beside it — FAIL, naming the missing steps.
+3. **No step is allowed to fail** — no `continue-on-error: true`,
+   `continueOnError: true` or `allow_failure: true` outside a comment.
+4. **`forge` and `review_evidence_cmd` in the manifest match `Hosting platform:`
+   and `Review evidence:` in `CLAUDE.md`.** A question answered twice and
+   differently has one answer nobody is reading.
+
+Report **unverifiable locally**, and say which setting the user must confirm by
+hand, because the pipeline file cannot make itself mandatory on any platform:
+branch protection (GitHub), *Pipelines must succeed* (GitLab), a **Build
+Validation** policy (Azure DevOps), or a minimum-successful-builds branch
+restriction (Bitbucket). Applies to solo projects too (`SETUP.md` Q5).
+
+Report **unverifiable locally** for perimeter ownership as well, and read
+`Perimeter ownership:` from `CLAUDE.md`. If it says `UNOWNED`, do not treat that as
+a FAIL — it is a recorded decision — but state plainly in the report that the
+enforcement perimeter has no trust anchor outside itself on this project. If the
+line is missing or still a placeholder, that **is** a FAIL: an undocumented gap
+gets trusted past.
 
 ### 7. Installed layout matches the manifest
 
 Read `.claude/framework-manifest.json` and check every `files[]` entry's
-`installed` path actually exists. This is a real check rather than a guess: before
+`installed` path actually exists — and every `per_repo_files[]` entry's, once per
+entry in `repos[]` with `{{REPO_DIR}}` substituted. A project with three repos has
+three gates and three stub ratchets, and checking only `files[]` would report the
+other two as fine without looking at them. This is a real check rather than a guess: before
 the manifest existed this step could only assert that a fixed list of directories
 was present, and had no way to know which of the optional ones a given project was
 supposed to have — so absence was always ambiguous and always reported N/A.

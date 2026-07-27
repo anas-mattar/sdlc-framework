@@ -79,7 +79,7 @@ gate scripts stop agreeing on the list.
 > does not promise the status boards are unchanged.
 
 Add `.gate-result.json` to `.gitignore`. The receipt is local evidence of a local
-run; a committed receipt is a receipt someone can forge in a pull request.
+run; a committed receipt is a receipt someone can forge in a change request.
 
 > The receipt records *that a verification happened and on what*. Trusting the
 > user to run the gate is deliberate; trusting a transcribed number is not.
@@ -108,11 +108,17 @@ limits are undocumented gets trusted past them. Treat `.git/info/exclude` and
 `.gitignore` (which is tracked, diffable, and covered) over `.git/info/exclude`
 (which is none of those).
 
+A fourth gap applies only to multi-repo projects, where the requirements and the
+code they describe are in different repositories: the fingerprint covers one tree,
+so a sub-repo receipt says nothing about a `tasks.md` in the wrapper. See
+`docs/process/repository-strategy.md`, which states the rule.
+
 ## CI Runs the Same Gate — Solo Included
 
-CI runs `./gate.sh` (or `gate.ps1`) on every PR — the exact script the developer
-ran locally. There is no separate CI command chain to drift out of sync. Start from
-`tooling/ci/gate.yml` and require the check on `main`.
+CI runs `./gate.sh` (or `gate.ps1`) on every change request — the exact script the
+developer ran locally. There is no separate CI command chain to drift out of sync.
+Start from the pipeline for this project's hosting platform in `tooling/ci/` and
+make the check mandatory on `main` with protected-branch rules.
 
 - Locally, the gate stays user-run.
 - CI is the backstop: **no phase merges without a green gate**, even if a developer
@@ -124,7 +130,7 @@ ran locally. There is no separate CI command chain to drift out of sync. Start f
 - CI also runs the gate script **pinned by hash** (`.gate-sha256`), because CI runs
   a script the party being checked can edit. The pin covers the gate script, the
   stub ratchet and its baseline, and CI checks that the pin **names** them — a hash
-  file is only evidence about the lines it contains. See `tooling/ci/gate.yml`.
+  file is only evidence about the lines it contains.
 
 **This is not a team rule, and it is least optional when you are alone.** A solo
 project has no peer review, so CI is its only mechanical enforcement — the local

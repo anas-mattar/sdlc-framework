@@ -29,8 +29,9 @@ my-app/
 ├── .gate-sha256                   # ← generated: sha256sum gate.sh check-stubs.sh
 │                                  #    .gate-stubs-baseline > .gate-sha256
 ├── .gitignore                     # ← in this folder: note the .gate-result.json line
-├── .github/workflows/gate.yml     # ← copied from tooling/ci/gate.yml
-├── .github/CODEOWNERS             # ← copied from tooling/ci/CODEOWNERS
+├── tooling/ci/gate-ci.sh          # ← the checks; every platform installs this
+├── .github/workflows/gate.yml     # ← wrapper, from tooling/ci/github/
+├── .github/CODEOWNERS             # ← from tooling/ci/github/ (this example is on GitHub)
 ├── .claude/
 │   ├── settings.json              # ← copied from tooling/claude/
 │   ├── framework-manifest.json    # ← copied from framework-manifest.template.json

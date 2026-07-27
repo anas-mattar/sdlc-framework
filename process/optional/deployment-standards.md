@@ -22,7 +22,7 @@
 When the first deployable module is planned, this document will define:
 
 - **CI/CD gate enforcement** — beyond the per-repo gate check
-  (`tooling/ci/gate.yml`), the deployment pipeline's own gates and the branch
+  (`tooling/ci/gate-ci.sh`), the deployment pipeline's own gates and the branch
   protection that makes them non-optional.
 - **Environment promotion** — the ordered path (e.g. dev → test → staging →
   production) and the approval required at each boundary.

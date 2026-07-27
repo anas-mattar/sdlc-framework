@@ -49,12 +49,12 @@ features concurrently: any scheme that **computes** the next number by scanning
 existing folders hands both developers the same number. On a team, numbers are
 **allocated** instead. Pick ONE scheme per project:
 
-- **Default — tracker issue IDs.** If the project has an issue tracker
-  (GitHub/GitLab/Jira), create the issue first and use its number as the spec
-  number (`specs/feature/142-…`). The tracker is already an atomic allocator: zero
-  coordination, no push race, nothing to explain to a new developer, and every spec
-  folder links to its ticket. Assigning yourself the issue **is** the claim. It also
-  works under branch protection that forbids direct pushes to `main`, which many
+- **Default — tracker issue IDs.** If the project has an issue tracker, create the
+  issue first and use its number as the spec number (`specs/feature/142-…`). The
+  tracker is already an atomic allocator: zero coordination, no push race, nothing
+  to explain to a new developer, and every spec folder links to its ticket.
+  Assigning yourself the issue **is** the claim. It also works under
+  protected-branch rules that forbid direct pushes to `main`, which many
   organizations mandate. Numbers will be sparse and non-contiguous — cosmetic only.
 - **Alternative — the claim commit.** For projects with no tracker (or where specs
   live apart from it), the same roadmap commit that sets the
@@ -72,14 +72,14 @@ existing folders hands both developers the same number. On a team, numbers are
   number. Hence the strict order: **claim → push → then branch and spec**,
   never the reverse.
   This scheme requires the claim commit to go **directly to main — the one
-  exemption from the review gate.** A claim held on a branch or in an open PR is
-  invisible to other developers' pulls, so the lock would not exist exactly when
-  it is needed. The exemption is safe because a claim commit contains only the one
-  roadmap line (number + feature name + owner) — no code, no spec content.
-  Everything after it follows the normal process. On multi-repo projects this
-  targets the wrapper/specs repo's main; code-repo branch protection is
-  unaffected. **If your organization forbids direct pushes to main anywhere —
-  and many do — this scheme is not available to you: use tracker IDs.**
+  exemption from the review gate.** A claim held on a branch or in an open change
+  request is invisible to other developers' pulls, so the lock would not exist
+  exactly when it is needed. The exemption is safe because a claim commit contains
+  only the one roadmap line (number + feature name + owner) — no code, no spec
+  content. Everything after it follows the normal process. On multi-repo projects
+  this targets the wrapper/specs repo's main; the code repos' protected-branch
+  rules are unaffected. **If your organization forbids direct pushes to main
+  anywhere — and many do — this scheme is not available to you: use tracker IDs.**
 
 The rules below apply to whichever scheme you picked:
 

@@ -62,7 +62,7 @@ Does not contain:
 
 The wrapper root repository holds shared:
 
-- Specs (`specs/[feature-name]/`)
+- Specs (`specs/feature/NNN-<name>/`)
 - Process and rules documentation (`docs/`)
 - Architecture and business source documents
 - Screenshots
@@ -96,3 +96,49 @@ When a feature affects both backend and frontend:
 3. The backend contract must be defined before frontend implementation.
 4. Merge backend only after gate and review.
 5. Merge frontend only after the backend contract is stable or mocked.
+
+## The Gate Receipt Across Repositories
+
+A receipt is a `git write-tree` over **one** repository. That is the whole of its
+scope, and the wrapper pattern splits a phase across two or three of them: the
+requirements (`spec.md`, `plan.md`, `tasks.md`) live in the wrapper, and the code
+they describe lives in a sub-repo. So the guarantee `docs/process/gate-command.md`
+states — *the requirements it was measured against have not moved since* — holds
+inside each repository and **does not cross the boundary between them**. A backend
+receipt says nothing about `tasks.md`, because `tasks.md` is not in that tree.
+
+This is a property of content-hashing one git tree, not a defect to fix in the
+gate. It is written down here because a control whose limits are undocumented gets
+trusted past them.
+
+**The rule.**
+
+1. **Only code repositories have a gate.** The wrapper holds no build and no tests,
+   so it gets no `gate.sh`, no `.gate-stubs-baseline` and no `.gate-sha256`. Do not
+   install one to make the layout look symmetrical; a gate that verifies nothing is
+   the decoration this framework exists to remove.
+2. **One receipt per repository the phase changed.** A phase touching backend and
+   frontend needs two valid receipts, checked independently. Definition of Done
+   item 3 is satisfied only when *every* touched repo reports `RECEIPT: valid`.
+3. **The wrapper is committed first.** Specs are committed and pushed in the
+   wrapper *before* the gate runs in any sub-repo. This makes the requirements a
+   git object with a timestamp that precedes the run, which is the same argument
+   Definition of Done item 1 makes about approval.
+4. **The wrapper tree must be clean when the phase closes.** `/phase-done` checks
+   `git status --porcelain` in the wrapper alongside each sub-repo receipt. An
+   uncommitted change there means the requirements may have moved after the gate
+   ran — precisely the condition a receipt detects in-repo and cannot detect
+   across repos.
+5. **Record what the receipts were measured against.** `/phase-done` writes the
+   wrapper's `git rev-parse HEAD` into the phase's `status.md` next to each repo's
+   receipt. `status.md` is outside every fingerprint, so recording it stales
+   nothing, and it turns "which specs was this built from" from a memory into a
+   SHA a reviewer can check out.
+
+**What this does not close.** Rules 3–5 detect *uncommitted* requirement drift and
+record the commit the phase claimed to build from. They do not prevent a wrapper
+commit that rewrites `tasks.md` between the gate run and the merge — nothing short
+of putting both trees in one repository would. If that risk matters more than the
+deploy independence that bought the split, the honest answer is a single
+repository, and `SETUP.md` Q2 says to choose multi-repo only when the lifecycles
+are genuinely separate.

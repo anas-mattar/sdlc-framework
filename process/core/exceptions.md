@@ -48,8 +48,8 @@ Every column is required, and every one is doing work:
 
 ## The cost that makes it work
 
-**CI fails every subsequent pull request while an open exception is past its
-remediation date.** Not the PR that opened the exception — the next one, and the
+**CI fails every subsequent change request while an open exception is past its
+remediation date.** Not the one that opened the exception — the next one, and the
 one after, until the row is closed.
 
 An exception path with no cost is just the process, and it will be used for
@@ -65,12 +65,13 @@ Close a row by striking it through and adding the commit that remediated it:
 | ~~2026-03-04~~ | ~~014-payment-retry ph2~~ | ~~5, 6~~ | ~~Prod incident~~ | ~~A. Nkemi~~ | **closed 2026-03-09, a1b2c3d** |
 ```
 
-`tooling/ci/gate.yml` ships the check. It reads `docs/exceptions.md`, ignores rows
-whose first cell is struck through, and fails when any remaining row's *Remediate
-by* date is in the past. Six details are worth knowing before you edit the table,
-and they have one thing in common: **anything this check cannot read, it fails on.**
-A row it skipped would be an exception with no deadline, which is the outcome the
-whole mechanism exists to prevent.
+`tooling/ci/gate-ci.sh` ships the check, and every platform wrapper runs it. It
+reads `docs/exceptions.md`, ignores rows whose first cell is struck through, and
+fails when any remaining row's *Remediate by* date is in the past. Seven details
+are worth knowing before you edit the table, and they have one thing in common:
+**anything this check cannot read, it fails on.** A row it skipped would be an
+exception with no deadline, which is the outcome the whole mechanism exists to
+prevent.
 
 - It finds the deadline by the **column header**, not by position, so you can add
   or reorder columns. The header must be exactly *Remediate by* or *Due by*
@@ -91,15 +92,22 @@ whole mechanism exists to prevent.
   turned a typo into an exception that never came due.
 - Only the **first cell** decides whether a row is closed. Strike the whole row
   through by all means, but `~~` elsewhere in an open row does not close it.
-- **Deleting the file fails the build** once it has ever existed. Close rows by
-  striking them through; the history of what was accepted, by whom, is the record.
-  A file with **no table at all** is fine — if you close the last exception by
-  removing its rows and leaving a sentence saying so, the check passes.
+- **Every table needs a deadline column, not just one table in the file.** A table
+  with rows and no *Remediate by* column fails the build. It used to be skipped,
+  which meant a single second table with a satisfied deadline switched the check off
+  for every overdue row in every other table.
+- **Erasing the rows fails the build, exactly as deleting the file does** — once
+  the file has ever had rows in this repository's history. Both spellings destroy
+  the same record for the same cost, and for three releases only the file deletion
+  was caught. Close rows by striking them through; the history of what was
+  accepted, and by whom, *is* the record. A file that has never had a table is
+  fine, and so is a file whose only rows are struck through.
 
 ## What an exception never covers
 
 - Committing the package-guard override (`.claude/allow-package-changes`).
-- Weakening `gate.sh`, the CI workflow, or `CODEOWNERS` to make a check pass.
+- Weakening `gate.sh`, the CI pipeline, or the code-ownership rules to make a
+  check pass.
 - Skipping human review on a change that touches money, permissions, or data
   migration. If it is important enough to rush, it is important enough to look at.
 

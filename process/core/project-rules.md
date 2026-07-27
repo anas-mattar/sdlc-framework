@@ -20,8 +20,8 @@ recorded in `CLAUDE.md`:
 | Gate granularity | once per feature | once per phase |
 | Review | AI review + developer acceptance | AI review + human review |
 
-In every tier: screenshots are placed in `specs/[feature-name]/screenshots/` when
-UI is involved, and implementation never starts from an unapproved spec.
+In every tier: screenshots are placed in `specs/feature/NNN-<name>/screenshots/`
+when UI is involved, and implementation never starts from an unapproved spec.
 
 ## What a Phase Is
 

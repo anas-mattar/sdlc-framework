@@ -4,14 +4,14 @@
 #
 # WHY: every artifact the gate's verdict rests on lives inside the repository,
 # which means inside the perimeter the party being checked controls. The gate
-# script defines what "passing" means. The workflow decides whether the gate runs
+# script defines what "passing" means. The pipeline decides whether the gate runs
 # at all. The pin file is what makes a change to the gate visible. The hook
 # configuration decides whether the package guard exists. None of these is
-# protected by anything mechanical, and all of them can be edited in the same pull
-# request as the work they would excuse.
+# protected by anything mechanical, and all of them can be edited in the same
+# change request as the work they would excuse.
 #
-# CODEOWNERS does not prevent those edits. It makes them require a named human's
-# approval, which is the only trust anchor available that sits outside the
+# Code ownership does not prevent those edits. It makes them require a named
+# human's approval, which is the only trust anchor available that sits outside the
 # perimeter. On a solo project, listing yourself is still worth it: GitHub will
 # surface the file in the review UI and the approval becomes a timestamped,
 # out-of-band act rather than an assumption.
@@ -21,8 +21,9 @@
 
 # NOTE ON PATHS. GitHub silently ignores a CODEOWNERS line that matches no file.
 # A stale path is therefore indistinguishable from a protected one in the UI, and
-# the only way to tell is to open a PR touching the file and see whether a review
-# is demanded. Check these against the layout after every /framework-upgrade.
+# the only way to tell is to open a change request touching the file and see
+# whether a review is demanded. Check these against the layout after every
+# /framework-upgrade.
 
 # --- the gate's own definition ---------------------------------------------
 # Change any of these and the meaning of "the gate passed" changes.
@@ -32,17 +33,25 @@
 
 # The stub ratchet is part of the gate: `echo 9999 > .gate-stubs-baseline` turns
 # it off, and the script then reports "improved" and exits 0. It is pinned in
-# .gate-sha256 as well -- see the `Pin the gate` step, which asserts that the pin
-# NAMES these files rather than merely verifying whatever lines it contains.
+# .gate-sha256 as well -- see the `pin` step, which asserts that the pin NAMES
+# these files with a real digest rather than merely verifying whatever lines it
+# happens to contain.
 /check-stubs.sh             {{OWNER}} {{REVIEWER}}
 /check-stubs.ps1            {{OWNER}} {{REVIEWER}}
 /.gate-stubs-baseline       {{OWNER}} {{REVIEWER}}
 
 # --- whether the gate runs at all ------------------------------------------
 # For same-repo pull_request events GitHub runs the workflow definition from the
-# head branch, so without this a pull request can weaken its own required check.
+# head branch, so without this a change request can weaken its own required check.
+#
+# tooling/ci/ is here for the same reason and is NEW in the four-platform layout:
+# the workflow file is a wrapper and every check it performs lives in
+# tooling/ci/gate-ci.sh. Owning the wrapper and not the script it calls would
+# leave the entire gate editable in silence — the exact half-true delegation the
+# pin step exists to close.
 /.github/workflows/         {{OWNER}} {{REVIEWER}}
 /.github/CODEOWNERS         {{OWNER}} {{REVIEWER}}
+/tooling/ci/                {{OWNER}} {{REVIEWER}}
 
 # --- whether the guards exist ----------------------------------------------
 # settings.json wires the package and install guards; the hooks are the guards.

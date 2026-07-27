@@ -65,7 +65,7 @@ That is the only stack-bound part, and `SETUP.md` Q1 expects you to add a folder
 for yours, starting from the closest existing one.
 
 The tooling sits in between: the gate scripts' receipt machinery is pure git and
-shell, with three or four stack-specific command lines to swap; `tooling/ci/gate.yml`
+shell, with three or four stack-specific command lines to swap; `tooling/ci/`
 needs its toolchain block replaced; and the package guard already covers 56
 manifest and lockfile patterns across every mainstream ecosystem, whether or not
 layer-2 rules exist for it — a guard that quietly ignores `go.mod` is worse than

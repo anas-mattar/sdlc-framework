@@ -89,7 +89,7 @@ Out of scope:
   limited to a single roadmap line; if your organization forbids it, use the
   tracker-ID scheme instead.
 - A developer choosing not to run the gate. The framework's answer to that is CI
-  (`tooling/ci/gate.yml`), which is a backstop, not a guarantee.
+  (`tooling/ci/gate-ci.sh`), which is a backstop, not a guarantee.
 
 ## A note on trust
 

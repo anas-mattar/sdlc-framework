@@ -4,7 +4,7 @@
     "",
     "WHY THIS FILE EXISTS. The install RENAMES most of what it copies: stacks/<name>/ becomes",
     "docs/stacks/<backend>/, modules/contracts/ becomes docs/contracts/, tooling/gate/gate-<stack>.sh becomes",
-    "gate.sh at each repo root, tooling/ci/gate.yml becomes .github/workflows/gate.yml. Nothing recorded those",
+    "gate.sh at each repo root, tooling/ci/<platform>/ becomes that platform's pipeline path. Nothing recorded those",
     "renames, so /framework-upgrade could only resolve docs/process/ -- the one directory whose mapping is 1:1.",
     "For everything else it had no way to know which upstream file an installed file came from, and the stack",
     "identity was destroyed outright: once stacks/dotnet-api/ is called docs/stacks/<backend>/, nothing on disk",
@@ -30,6 +30,18 @@
   "$comment_answers": "The SETUP answers that decide which files are installed and which rules apply. /framework-doctor reads these; keep them identical to the matching lines in CLAUDE.md.",
   "scope_tier": "{{SCOPE_TIER}}",
   "developers": "{{TEAM_SIZE}}",
+
+  "$comment_forge": [
+    "The hosting platform, from SETUP Q7. One of: github, gitlab, azure-devops, bitbucket.",
+    "It decides which CI wrapper and which code-ownership mechanism this project installed, and",
+    "/framework-upgrade needs it to know which upstream pipeline file an installed one came from.",
+    "review_evidence_cmd is the command Definition of Done item 6 accepts as proof that a human",
+    "approved the change request -- see tooling/ci/README.md for the per-platform forms. It lives here",
+    "as well as in CLAUDE.md because /framework-doctor checks the two agree; a project that answers this",
+    "question twice and differently has one answer nobody is reading."
+  ],
+  "forge": "{{FORGE}}",
+  "review_evidence_cmd": "{{REVIEW_EVIDENCE_CMD}}",
 
   "$comment_stacks": [
     "Every stack this project installed, keyed by the ROLE it plays here. The installed directory is",
@@ -62,10 +74,29 @@
     "          reports upstream changes but does not touch the file."
   ],
 
+  "$comment_files": [
+    "Two lists, because the install has two shapes. `files` is installed ONCE per project. `per_repo_files`",
+    "is installed once per entry in `repos` above, with {{REPO_DIR}} standing for that repo's path and",
+    "{{REPO_STACK_FAMILY}} for its gate family (node, dotnet, ...).",
+    "",
+    "`files` used to carry the gate and the stub ratchet under fixed {{BACKEND_DIR}} and {{FRONTEND_DIR}}",
+    "slots, which contradicted `repos` being an array and `$comment_stacks` saying there is no limit of two.",
+    "A third repo got no manifest entry for its gate, so /framework-upgrade skipped it in silence -- which is",
+    "the exact failure this file exists to end. Expand per_repo_files per repo when you write the manifest,",
+    "or leave the placeholders and let /framework-upgrade expand them against `repos`.",
+    "",
+    "Conditionally-installed files are listed ONE PER FILE, never as a directory. process/optional/ was a",
+    "single `copy` entry for three files that SETUP installs independently (Q2, multi-agent use, and a",
+    "placeholder you may skip), so the manifest asserted a directory the project does not have. Delete the",
+    "lines this project did not install."
+  ],
+
   "files": [
     { "upstream": "process/core/", "installed": "docs/process/", "class": "copy" },
-    { "upstream": "process/team/", "installed": "docs/process/", "class": "copy" },
-    { "upstream": "process/optional/", "installed": "docs/process/", "class": "copy" },
+    { "upstream": "process/team/team-workflow.md", "installed": "docs/process/team-workflow.md", "class": "copy" },
+    { "upstream": "process/optional/repository-strategy.md", "installed": "docs/process/repository-strategy.md", "class": "copy" },
+    { "upstream": "process/optional/orchestration.md", "installed": "docs/process/orchestration.md", "class": "copy" },
+    { "upstream": "process/optional/deployment-standards.md", "installed": "docs/process/deployment-standards.md", "class": "copy" },
     { "upstream": "process/templates/", "installed": "specs/_templates/", "class": "copy" },
     { "upstream": "stacks/{{BACKEND_STACK}}/", "installed": "docs/stacks/{{BACKEND_STACK}}/", "class": "copy" },
     { "upstream": "stacks/{{FRONTEND_STACK}}/", "installed": "docs/stacks/{{FRONTEND_STACK}}/", "class": "copy" },
@@ -74,24 +105,50 @@
     { "upstream": "tooling/claude/hooks/", "installed": ".claude/hooks/", "class": "copy" },
     { "upstream": "tooling/claude/settings.json", "installed": ".claude/settings.json", "class": "merge" },
     { "upstream": "tooling/project-docs/", "installed": "docs/project/", "class": "local" },
-    { "upstream": "tooling/gate/gate-{{BACKEND_STACK_FAMILY}}.sh", "installed": "{{BACKEND_DIR}}/gate.sh", "class": "merge" },
-    { "upstream": "tooling/gate/gate-{{BACKEND_STACK_FAMILY}}.ps1", "installed": "{{BACKEND_DIR}}/gate.ps1", "class": "merge" },
-    { "upstream": "tooling/gate/gate-{{FRONTEND_STACK_FAMILY}}.sh", "installed": "{{FRONTEND_DIR}}/gate.sh", "class": "merge" },
-    { "upstream": "tooling/gate/gate-{{FRONTEND_STACK_FAMILY}}.ps1", "installed": "{{FRONTEND_DIR}}/gate.ps1", "class": "merge" },
-    { "upstream": "tooling/gate/check-stubs.sh", "installed": "{{BACKEND_DIR}}/check-stubs.sh", "class": "copy" },
-    { "upstream": "tooling/gate/check-stubs.ps1", "installed": "{{BACKEND_DIR}}/check-stubs.ps1", "class": "copy" },
-    { "upstream": "tooling/gate/check-stubs.sh", "installed": "{{FRONTEND_DIR}}/check-stubs.sh", "class": "copy" },
-    { "upstream": "tooling/gate/check-stubs.ps1", "installed": "{{FRONTEND_DIR}}/check-stubs.ps1", "class": "copy" },
-    { "upstream": "tooling/ci/gate.yml", "installed": ".github/workflows/gate.yml", "class": "merge" },
-    { "upstream": "tooling/ci/CODEOWNERS", "installed": ".github/CODEOWNERS", "class": "merge" },
     { "upstream": "tooling/claude/framework-manifest.template.json", "installed": ".claude/framework-manifest.json", "class": "local" },
     { "upstream": "CLAUDE.md.template", "installed": "CLAUDE.md", "class": "local" }
   ],
 
+  "$comment_per_repo": [
+    "Installed once PER ENTRY in repos[]. Expand it per repo, replacing {{REPO_DIR}} with that repo's path",
+    "and {{REPO_STACK_FAMILY}} with its gate family. A single-repo project expands it once with an empty path.",
+    "",
+    "CI LIVES HERE, NOT IN files[]. The pipeline runs where the code is, so a multi-repo project needs one",
+    "pipeline per code repo -- and while these entries sat in files[] a project got exactly one, for whichever",
+    "repo happened to be first. The wrapper is thin; gate-ci.sh carries every check, so BOTH are per-repo and",
+    "both must be present. A repo with the wrapper and no script has a pipeline that cannot run; a repo with",
+    "the script and no wrapper has a gate nothing invokes.",
+    "",
+    "{{FORGE}} is the platform from SETUP Q7; {{CI_WRAPPER_FILE}} and {{CI_WRAPPER_INSTALLED}} follow from it:",
+    "  github        gate.yml                   -> .github/workflows/gate.yml",
+    "  gitlab        .gitlab-ci.yml             -> .gitlab-ci.yml",
+    "  azure-devops  azure-pipelines.yml        -> azure-pipelines.yml",
+    "  bitbucket     bitbucket-pipelines.yml    -> bitbucket-pipelines.yml",
+    "",
+    "{{OWNERSHIP_FILE}} / {{OWNERSHIP_INSTALLED}} likewise, and only two platforms have a FILE:",
+    "  github        CODEOWNERS  -> .github/CODEOWNERS",
+    "  gitlab        CODEOWNERS  -> CODEOWNERS        (Premium only -- see the file)",
+    "  azure-devops  no file exists. DELETE the ownership entry and configure branch policies instead.",
+    "  bitbucket     no file exists. DELETE the ownership entry and configure branch restrictions instead.",
+    "",
+    "Deleting the entry on those two platforms is correct, not a shortcut: a manifest that claims a file which",
+    "is not there makes /framework-doctor report a phantom problem, and a check that reports phantom problems",
+    "is one people learn to ignore. Record the decision in CLAUDE.md so the gap is documented rather than lost."
+  ],
+  "per_repo_files": [
+    { "upstream": "tooling/gate/gate-{{REPO_STACK_FAMILY}}.sh", "installed": "{{REPO_DIR}}/gate.sh", "class": "merge" },
+    { "upstream": "tooling/gate/gate-{{REPO_STACK_FAMILY}}.ps1", "installed": "{{REPO_DIR}}/gate.ps1", "class": "merge" },
+    { "upstream": "tooling/gate/check-stubs.sh", "installed": "{{REPO_DIR}}/check-stubs.sh", "class": "copy" },
+    { "upstream": "tooling/gate/check-stubs.ps1", "installed": "{{REPO_DIR}}/check-stubs.ps1", "class": "copy" },
+    { "upstream": "tooling/ci/gate-ci.sh", "installed": "{{REPO_DIR}}/tooling/ci/gate-ci.sh", "class": "copy" },
+    { "upstream": "tooling/ci/{{FORGE}}/{{CI_WRAPPER_FILE}}", "installed": "{{REPO_DIR}}/{{CI_WRAPPER_INSTALLED}}", "class": "merge" },
+    { "upstream": "tooling/ci/{{FORGE}}/{{OWNERSHIP_FILE}}", "installed": "{{REPO_DIR}}/{{OWNERSHIP_INSTALLED}}", "class": "merge" }
+  ],
+
   "$comment_omitted": [
-    "Delete every entry above that this project did not install -- an optional module it skipped, a second",
-    "stack it does not have, the .ps1 gates on a POSIX-only team. A manifest that claims files which are not",
-    "there makes /framework-doctor report phantom problems, and a check that reports phantom problems is one",
-    "people learn to ignore."
+    "Delete every entry above that this project did not install -- an optional layer-1 document it skipped, a",
+    "second stack it does not have, the .ps1 gates on a POSIX-only team. A manifest that claims files which",
+    "are not there makes /framework-doctor report phantom problems, and a check that reports phantom problems",
+    "is one people learn to ignore."
   ]
 }

@@ -82,19 +82,23 @@ for it to be enforceable, and no other document is required to interpret it.
    write. Either is acceptable:
 
    ```
-   gh pr view --json reviews --jq '[.reviews[] | select(.state=="APPROVED") | .author.login]'
+   <the review-evidence command recorded in CLAUDE.md>
    git log -1 --format='%(trailers:key=Reviewed-by,valueonly)' <phase commit>
    ```
 
-   A pull-request approval is the stronger of the two: it is timestamped, attached
-   to a specific head SHA, and recorded outside the working tree. Solo projects can
-   use it too — approving your own pull request is still a deliberate, out-of-band
+   A **change-request approval** is the stronger of the two: it is timestamped,
+   attached to a specific head SHA, and recorded outside the working tree — on the
+   hosting platform rather than in the repository. Every platform exposes it
+   differently, so the exact command is chosen at setup and written into
+   `CLAUDE.md` rather than fixed here; a checklist that names one vendor's CLI is a
+   checklist that cannot be satisfied honestly on any other. Solo projects can use
+   it too — approving your own change request is still a deliberate, out-of-band
    act, and it is the difference between a review that happened and a file that
    says one did. The `human-pr-review.md` file remains the place the *findings* are
    recorded; it is no longer the thing that proves the review occurred.
 
 Items 1–5 gate the **phase commit**. Item 6 gates the **merge**: a human reviewer
-approves the pull request containing the committed phase. The order is
+approves the change request containing the committed phase. The order is
 commit → review → merge, so a reviewer has a commit to review; never merge on
 items 1–5 alone.
 

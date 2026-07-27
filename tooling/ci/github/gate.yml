@@ -1,0 +1,74 @@
+# CI gate — GitHub Actions wrapper.
+#
+# Copy to <repo>/.github/workflows/gate.yml, then uncomment the toolchain block
+# for your stack. Keep exactly ONE toolchain active per repo. BOTH ship commented
+# out: a file that arrives with one already active makes "uncomment yours" produce
+# two, and CI then runs `yarn install` on a repo with no package.json.
+#
+# This file is a WRAPPER. Every check it performs lives in tooling/ci/gate-ci.sh,
+# installed alongside it, so the four supported platforms cannot drift apart. Do
+# not inline a check here — add it to the script and to every wrapper, which is
+# what tests/framework-checks.sh asserts.
+#
+# Required on solo projects too, and least optional there. The reason is in
+# docs/process/gate-command.md -- see the section on running the same gate when
+# there is nobody else to review the work.
+#
+# After adding this, turn on branch protection for `main` and mark the `gate`
+# check as required — an unenforced check is decoration.
+
+name: gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      # fetch-depth: 0 — the default single-commit checkout has no history, so
+      # `git log -- docs/exceptions.md` returns nothing and both the "was this
+      # file deleted" and "were its rows emptied" tests silently pass forever. If
+      # full history is too expensive on this repo, say so in the PR and delete
+      # those tests rather than shipping checks that cannot fail.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Pin the gate
+        run: sh tooling/ci/gate-ci.sh pin
+
+      - name: The package-guard override must not be committed
+        run: sh tooling/ci/gate-ci.sh override-not-committed
+
+      # --- toolchain: uncomment exactly ONE of these ---------------------------
+      # Node / Next.js:
+      # - uses: actions/setup-node@v4
+      #   with:
+      #     node-version: '20'
+      # - name: Install dependencies
+      #   run: corepack enable && yarn install --immutable
+
+      # .NET:
+      # - uses: actions/setup-dotnet@v4
+      #   with:
+      #     dotnet-version: '8.0.x'
+      # - name: Restore
+      #   run: dotnet restore
+      # -----------------------------------------------------------------------
+
+      - name: Stub ratchet
+        run: sh tooling/ci/gate-ci.sh stub-ratchet
+
+      - name: No overdue exceptions
+        run: sh tooling/ci/gate-ci.sh exceptions
+
+      - name: The package guards actually block
+        run: sh tooling/ci/gate-ci.sh verify-guards
+
+      - name: Run the gate
+        run: sh tooling/ci/gate-ci.sh run-gate
+        # Do not add `continue-on-error` — that turns the gate into a
+        # notification, and the framework's whole premise is that it is a gate.

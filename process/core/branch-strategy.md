@@ -38,7 +38,7 @@ ID), per `docs/process/team-workflow.md` §2a, which is authoritative on this.
   alternative is the numbering collision above.
 - **One branch per feature.** Do not bundle unrelated work onto a single branch.
 - Merge to `main` only **after the gate passes (a valid receipt locally, plus the
-  green CI gate on the PR) and human review is approved** (see
+  green CI gate on the change request) and human review is approved** (see
   `docs/process/gate-command.md`, `docs/process/review-process.md`, and
   `docs/process/definition-of-done.md`).
 - Never force-push `main`.
