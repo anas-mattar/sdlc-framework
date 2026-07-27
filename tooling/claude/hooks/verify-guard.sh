@@ -35,17 +35,84 @@ if [ -f .claude/allow-package-changes ]; then
     exit 1
 fi
 
-# Pair each matcher with the command configured under it, within PreToolUse only.
-# This is a line-oriented read rather than a JSON parse: an installed project has
-# no guaranteed interpreter, and settings.json ships one key per line. Minified
-# JSON collapses to a single line and is reported rather than misread.
+# Pair each matcher with the command configured under it, inside hooks.PreToolUse
+# and nowhere else. This is a line-oriented read rather than a JSON parse: an
+# installed project has no guaranteed interpreter, and settings.json ships one key
+# per line. Minified JSON collapses to a single line and is reported, not misread.
+#
+# BRACE DEPTH, NOT A BOOLEAN. The previous version set a flag on any line matching
+# /"PreToolUse"/ and cleared it on any line naming another hook event. It had no
+# idea where in the document it was, so matcher/command pairs found ANYWHERE after
+# such a line counted -- including inside a decoy object the JSON parser never
+# reads. settings.json already carries a top-level "$comment", so an "$examples"
+# sibling holding a well-formed PreToolUse block is idiomatic rather than
+# suspicious, and this file certified it:
+#
+#     "$examples": { "PreToolUse": { "file guard": {
+#         "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+#         "command": "sh .claude/hooks/guard-packages.sh" } } },
+#     "hooks": { "PreToolUse": [ { "matcher": "Read", "hooks": [ ... ] } ] }
+#
+# What Claude Code installs there is one hook on `Read`, which edits nothing, and
+# no Bash matcher at all -- every manifest edit and every install command
+# unguarded, reported as `GUARD: verified`, with CI green behind it. The matcher IS
+# checked now; it was being checked against a matcher that does not exist.
+#
+# So: find `"hooks"`, then `"PreToolUse"` beneath it, and accept pairs only while
+# still inside that subtree. Depth is counted by braces and brackets on each line,
+# which is sound for one-key-per-line JSON and is why minified input is refused
+# rather than read.
 pairs=$(awk '
-    /"PreToolUse"/                    { pre = 1 }
-    /"(PostToolUse|Stop|SubagentStop|SessionStart|UserPromptSubmit|Notification|PreCompact)"/ { pre = 0 }
-    pre && /"matcher"[[:space:]]*:/   { m = $0; sub(/.*"matcher"[^"]*"/, "", m); sub(/".*/, "", m) }
-    pre && /"command"[[:space:]]*:/   { c = $0; sub(/.*"command"[^"]*"/, "", c); sub(/".*/, "", c)
-                                        if (m != "") print m "\t" c }
+    # Depth BEFORE this line is the running total; the key on a line belongs to the
+    # object that encloses it, so test membership first, then update.
+    {
+        inhooks = (hooks_depth >= 0 && depth > hooks_depth)
+        inpre   = (pre_depth   >= 0 && depth > pre_depth   && inhooks)
+    }
+    NR == 1 { hooks_depth = -1; pre_depth = -1 }
+    /"hooks"[[:space:]]*:/ && hooks_depth < 0 { hooks_depth = depth }
+    /"PreToolUse"[[:space:]]*:/ {
+        if (inhooks && pre_depth < 0) pre_depth = depth
+        else if (!inhooks) stray_event = NR
+    }
+    # A nested "hooks": [ ... ] array inside an entry is part of the subtree, so it
+    # must not reset hooks_depth -- guarded by the `< 0` test above.
+    inpre && /"matcher"[[:space:]]*:/   { m = $0; sub(/.*"matcher"[^"]*"/, "", m); sub(/".*/, "", m) }
+    inpre && /"command"[[:space:]]*:/   { c = $0; sub(/.*"command"[^"]*"/, "", c); sub(/".*/, "", c)
+                                          if (m != "") print m "\t" c }
+    # Any matcher or command OUTSIDE the real hooks subtree is the decoy shape.
+    # Report it rather than ignoring it: a settings.json carrying a second,
+    # plausible-looking hook block is either an attack or a copy-paste that someone
+    # believes is live, and both are worth stopping on.
+    !inpre && /"(matcher|command)"[[:space:]]*:/ { stray_pair = NR }
+    { n = gsub(/[{[]/, "&"); m2 = gsub(/[}\]]/, "&"); depth += n - m2 }
+    END {
+        if (stray_pair) printf "STRAY\t%d\n", stray_pair
+        if (stray_event) printf "STRAYEVENT\t%d\n", stray_event
+    }
 ' "$settings")
+
+# Minified JSON is depth-counted on a single line, so every key looks like it sits
+# outside the subtree and the stray-pair message below would be technically true
+# and useless. Name the real problem instead; this is a plausible accident (a
+# formatter, a `jq -c`), not an attack.
+if [ "$(grep -c '' "$settings")" -le 2 ] && grep -q '"PreToolUse"' "$settings"; then
+    echo "FAIL: $settings is minified onto one line, and this script reads it line by line."
+    echo "  It cannot tell which keys are inside hooks.PreToolUse and which are not,"
+    echo "  so it refuses to guess. Reformat it one key per line and re-run."
+    exit 1
+fi
+
+stray=$(printf '%s\n' "$pairs" | sed -n 's/^STRAY\(EVENT\)\?	//p' | head -1)
+if [ -n "$stray" ]; then
+    echo "FAIL: $settings has \"matcher\"/\"command\" keys outside hooks.PreToolUse"
+    echo "  (first at line $stray). Claude Code reads only hooks.PreToolUse, so a"
+    echo "  hook block anywhere else is not installed no matter how correct it looks."
+    echo "  This script used to read those keys and certify them. Delete the block,"
+    echo "  or move it under \"hooks\" if it was meant to be live."
+    exit 1
+fi
+pairs=$(printf '%s\n' "$pairs" | grep -v '^STRAY')
 
 if [ -z "$pairs" ]; then
     echo "FAIL: no PreToolUse hook found in $settings — the package guards are not installed."
@@ -55,9 +122,10 @@ fi
 
 TAB=$(printf '\t')
 fail=0
-substituted=0
+substituted=0   # a DIFFERENT script was run than the one configured
+unpinned=0      # the lists could only be counted, not pinned by digest
 
-# --- the lists must still be the size they shipped --------------------------
+# --- the lists must still be the lists that shipped --------------------------
 # Behavioural cases can only ever sample. Cutting INSTALL_COMMANDS down to exactly
 # the handful this script exercises left it printing GUARD: verified while
 # `npx cowsay`, `pnpm add react`, `cargo add serde`, `bun install`, `gem install
@@ -66,18 +134,67 @@ substituted=0
 # framework repository, not in an installed project, where THIS script is the only
 # mechanical check there is.
 #
-# So the size is asserted as well as the behaviour: a floor, ratcheted the same way
-# the rest of the framework ratchets. Adding patterns is free; removing one means
-# lowering a number here, in the same diff, where a reviewer sees it.
+# A COUNT WAS NOT ENOUGH, and the fix for that finding is the finding one layer
+# down. The previous version asserted a floor -- 86 manifest patterns, 56 install
+# commands -- which detects DELETION and not SUBSTITUTION. Keeping the twelve
+# commands this script exercises, replacing the other forty-four with `zzjunk00`
+# and leaving the line count at 56, produced:
+#
+#     PASS  manifest list has 86 entries (floor 86)
+#     PASS  install-command list has 56 entries (floor 56)
+#     GUARD: verified
+#
+# while `npm ci`, `yarn install`, `uv add`, `poetry add`, `bundle add`, `conda
+# install`, `pipx install`, `go install`, `yarn upgrade` and `pnpm dlx` were all
+# open. So the lists are pinned by DIGEST, not by length: changing one means
+# changing a hash here, in the same diff, where a reviewer sees it. That is the
+# same argument .gate-sha256 makes about the gate script.
+#
+# FOUR digests, not two. The configured command may name either twin -- and on the
+# shipped default it names the .ps1, because that is the platform where the POSIX
+# form fails open. Pinning only the .sh lists made the shipped Windows wiring
+# report BROKEN on a healthy install, which is the cry-wolf failure that gets a
+# verifier deleted. Each twin's list block is pinned on its own terms, so the .ps1
+# lists are now covered too -- they never were.
+#
+# Regenerate after a legitimate list change with:
+#     sh .claude/hooks/verify-guard.sh --print-digests
+GUARDED_DIGEST_SH=c68dc68623405006f36b034cf73dcc70282b0442ec9af1eaed1e5b6f3c0980a7
+INSTALL_DIGEST_SH=37c9426ef80866a630e7304f8460545140eb3e14fc0108924c1fe42baf37e979
+GUARDED_DIGEST_PS1=04617cf3a9f4d77f189fc678f38dab71890c74897cde76a2e7bd608c4a3a5aff
+INSTALL_DIGEST_PS1=2e5f65bd2e5bc60e89d126d7f2ca08afcdee72bd3ec27bb8d88d4cd0a3843843
+# Kept as a floor of last resort for the no-digest-tool case below. These are not
+# the assertion any more; they are what is left when there is nothing to hash with.
 GUARDED_FLOOR=86
 INSTALL_FLOOR=56
 
-# The two .sh lists are shaped differently and must be counted differently: the
-# manifest patterns are whitespace-separated across lines, the install patterns are
-# one PER LINE because they contain spaces (`dotnet add package`). Counting words
-# in the install list reported 117 for 56 entries, and a floor that a half-emptied
-# list still clears is not a floor. In the .ps1 hooks both lists are quoted
-# strings, so one rule covers them.
+# No digest tool is guaranteed. coreutils gives sha256sum, macOS gives
+# `shasum -a 256`, and openssl is usually somewhere. If none of the three exists we
+# do NOT silently fall back to the count and call it verified -- that is the exact
+# move this whole file exists to argue against. We fall back, say so, and exit 3.
+digest_tool=""
+if   command -v sha256sum >/dev/null 2>&1; then digest_tool="sha256sum"
+elif command -v shasum    >/dev/null 2>&1; then digest_tool="shasum -a 256"
+elif command -v openssl   >/dev/null 2>&1; then digest_tool="openssl dgst -sha256"
+fi
+
+# The list body, normalised so a digest survives the things that legitimately
+# differ between checkouts: CR line endings, trailing whitespace, blank lines, and
+# comment lines (which are prose and may be re-wrapped without changing behaviour).
+list_body() {  # list_body <hook script> <begin marker> <end marker>
+    [ -f "$1" ] || return 0
+    sed -n "/$2/,/$3/p" "$1" | sed '1d;$d' \
+        | tr -d '\r' \
+        | grep -v '^[[:space:]]*#' \
+        | sed 's/[[:space:]]*$//' \
+        | grep -v '^[[:space:]]*$'
+}
+
+list_digest() {  # list_digest <hook script> <begin> <end>
+    [ -n "$digest_tool" ] || return 1
+    list_body "$1" "$2" "$3" | $digest_tool 2>/dev/null | tr -d ' *-' | cut -c1-64
+}
+
 list_size() {  # list_size <hook script> <begin marker> <end marker> <words|lines>
     [ -f "$1" ] || { echo 0; return; }
     case "$1" in
@@ -91,20 +208,63 @@ list_size() {  # list_size <hook script> <begin marker> <end marker> <words|line
     esac
 }
 
-check_list_size() {  # check_list_size <configured command> <begin> <end> <floor> <label> <words|lines>
+check_list_size() {  # check_list_size <cmd> <begin> <end> <digest var prefix> <label> <words|lines> <floor>
     # The script is the last word of the configured command -- the same
     # assumption runnable_or_twin makes.
     script=${1##* }
     n=$(list_size "$script" "$2" "$3" "$6")
-    if [ "$n" -ge "$4" ]; then
-        echo "  PASS  $5 list has $n entries (floor $4)"
+    # Pick the digest belonging to the twin actually configured.
+    case "$script" in
+        *.ps1) eval "want=\$${4}_PS1" ;;
+        *)     eval "want=\$${4}_SH"  ;;
+    esac
+    set -- "$1" "$2" "$3" "$want" "$5" "$6" "$7"
+
+    if [ -z "$digest_tool" ]; then
+        # Honest degradation: the count still catches wholesale deletion, and the
+        # exit status says the strong check did not run.
+        if [ "$n" -ge "$7" ]; then
+            echo "  WARN  $5 list has $n entries (floor $7) -- counted, NOT pinned:"
+            echo "        no sha256sum, shasum or openssl on this machine, so a list"
+            echo "        whose entries were REPLACED rather than removed would pass."
+            unpinned=1
+        else
+            echo "  FAIL  $5 list has $n entries, expected at least $7 -- $script has been cut down."
+            fail=1
+        fi
+        return
+    fi
+
+    actual=$(list_digest "$script" "$2" "$3")
+    if [ "$actual" = "$4" ]; then
+        echo "  PASS  $5 list matches the digest it shipped with ($n entries)"
     else
-        echo "  FAIL  $5 list has $n entries, expected at least $4 -- $script has been"
-        echo "        cut down. Patterns removed from the list are silently unguarded;"
-        echo "        the behavioural cases below only sample it."
+        echo "  FAIL  $5 list does not match the digest it shipped with."
+        echo "        expected $4"
+        echo "        actual   $actual   ($n entries)"
+        echo "        $script has been edited. A count would not have caught this:"
+        echo "        entries can be REPLACED without changing how many there are,"
+        echo "        and the behavioural cases below only sample the list."
+        echo "        If the change is intended, regenerate with:"
+        echo "            sh .claude/hooks/verify-guard.sh --print-digests"
         fail=1
     fi
 }
+
+# Regenerating the constants has to be one command, or it becomes a thing people
+# work around by deleting the check.
+if [ "${1:-}" = "--print-digests" ]; then
+    if [ -z "$digest_tool" ]; then
+        echo "No sha256sum, shasum or openssl on this machine — cannot compute digests."
+        exit 1
+    fi
+    echo "Paste these into verify-guard.sh (and verify-guard.ps1):"
+    echo "GUARDED_DIGEST_SH=$(list_digest .claude/hooks/guard-packages.sh GUARDED-MANIFESTS-BEGIN GUARDED-MANIFESTS-END)"
+    echo "INSTALL_DIGEST_SH=$(list_digest .claude/hooks/guard-installs.sh INSTALL-COMMANDS-BEGIN INSTALL-COMMANDS-END)"
+    echo "GUARDED_DIGEST_PS1=$(list_digest .claude/hooks/guard-packages.ps1 GUARDED-MANIFESTS-BEGIN GUARDED-MANIFESTS-END)"
+    echo "INSTALL_DIGEST_PS1=$(list_digest .claude/hooks/guard-installs.ps1 INSTALL-COMMANDS-BEGIN INSTALL-COMMANDS-END)"
+    exit 0
+fi
 
 # The WIRING is checked as configured; the BEHAVIOUR needs a command this machine
 # can actually run. settings.json ships the PowerShell commands, because that is
@@ -198,7 +358,7 @@ else
         fail=1
     fi
     check_list_size "$file_cmd" GUARDED-MANIFESTS-BEGIN GUARDED-MANIFESTS-END \
-        "$GUARDED_FLOOR" "manifest" words
+        GUARDED_DIGEST "manifest" words "$GUARDED_FLOOR"
     runnable_or_twin "$file_cmd" && file_cmd="$RUN_CMD"
 
     echo "guarded paths must be BLOCKED (exit 2):"
@@ -257,7 +417,7 @@ if [ -z "$inst_cmd" ]; then
 else
     echo "install guard: $inst_cmd"
     check_list_size "$inst_cmd" INSTALL-COMMANDS-BEGIN INSTALL-COMMANDS-END \
-        "$INSTALL_FLOOR" "install-command" lines
+        INSTALL_DIGEST "install-command" lines "$INSTALL_FLOOR"
     runnable_or_twin "$inst_cmd" && inst_cmd="$RUN_CMD"
     echo "install commands must be BLOCKED (exit 2):"
     cmd_case "$inst_cmd" "npm install"        "npm install left-pad"       2
@@ -311,9 +471,22 @@ else
         "sh .claude/hooks/verify-guard.sh"                                 0
 fi
 
-if [ $fail -eq 0 ] && [ $substituted -eq 0 ]; then
+if [ $fail -eq 0 ] && [ $substituted -eq 0 ] && [ $unpinned -eq 0 ]; then
     echo "GUARD: verified — manifest edits and install commands are both blocked without approval."
     exit 0
+fi
+if [ $fail -eq 0 ] && [ $substituted -eq 0 ] && [ $unpinned -eq 1 ]; then
+    # Behaviour passed and the wiring is right, but the lists were counted rather
+    # than pinned, so a substitution would have gone unnoticed. Name THAT, rather
+    # than reusing the interpreter message below: a diagnosis that misidentifies
+    # the problem sends the reader to fix the wrong thing, and this script's whole
+    # purpose is to be believed.
+    echo "GUARD: partially verified (the guard lists could not be pinned — this"
+    echo "  machine has no sha256sum, shasum or openssl). The behavioural cases"
+    echo "  passed and the wiring is correct, but the lists were only COUNTED, and"
+    echo "  a count cannot tell a replaced entry from an original one. Install"
+    echo "  coreutils (or openssl) and re-run before trusting the guard lists."
+    exit 3
 fi
 if [ $fail -eq 0 ]; then
     # Everything passed, but not on the hook Claude Code will invoke. Saying

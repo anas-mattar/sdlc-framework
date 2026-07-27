@@ -1075,6 +1075,99 @@ else
         bad "verify-guard reported exit $VG_RC for a guard with no perimeter and a five-entry list:"
         sed 's/^/          /' "$vg/out.txt"
     fi
+
+    # --- the OTHER half of verify-guard ------------------------------------
+    # Every assertion above mutates guard-installs. Deleting verify-guard's entire
+    # manifest-guard block -- 57 lines, all 21 blocked-path cases, all 4 allowed
+    # cases and the manifest list check -- left the three of them passing and the
+    # suite totals byte-identical, because assertion 3's mutation and both of its
+    # grep strings live in the install half. "Can this assertion be satisfied by
+    # deleting the thing it tests?" was yes, for half the file.
+    cp "$vg/.claude/settings.json.bak" "$vg/.claude/settings.json" 2>/dev/null
+    cp tooling/claude/hooks/guard-installs.sh "$vg/.claude/hooks/" 2>/dev/null
+    gp="$vg/.claude/hooks/guard-packages.sh"
+    awk '
+        /^GUARDED="package\.json/ { print "GUARDED=\"package.json\""; cut = 1; next }
+        cut && /"$/ { cut = 0; next }
+        cut { next }
+        { print }
+    ' "$gp" > "$gp.new" && mv "$gp.new" "$gp"
+    vg_run
+    if [ "$VG_RC" = 1 ] && grep -q 'FAIL  manifest list' "$vg/out.txt"; then
+        ok "verify-guard fails on a gutted MANIFEST list too, not just the install one"
+    else
+        bad "verify-guard reported exit $VG_RC for a guard-packages with a one-entry list:"
+        sed 's/^/          /' "$vg/out.txt"
+    fi
+
+    # --- W1: hook pairs read from outside hooks.PreToolUse -------------------
+    # settings.json ships a top-level "$comment", so an "$examples" sibling holding
+    # a well-formed PreToolUse block is idiomatic. The pair extractor was a boolean
+    # flag with no idea of nesting, so it read that decoy and certified it while
+    # the only REAL hook matched `Read`, which edits nothing.
+    cp tooling/claude/hooks/guard-packages.sh "$vg/.claude/hooks/" 2>/dev/null
+    cat > "$vg/.claude/settings.json" <<'VGDECOY'
+{
+  "$comment": "notes",
+  "$examples": {
+    "PreToolUse": {
+      "file guard": {
+        "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+        "command": "sh .claude/hooks/guard-packages.sh"
+      },
+      "install guard": {
+        "matcher": "Bash",
+        "command": "sh .claude/hooks/guard-installs.sh"
+      }
+    }
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read",
+        "hooks": [ { "type": "command", "command": "sh .claude/hooks/guard-packages.sh" } ]
+      }
+    ]
+  }
+}
+VGDECOY
+    vg_run
+    if [ "$VG_RC" = 1 ] && grep -q 'outside hooks.PreToolUse' "$vg/out.txt"; then
+        ok "verify-guard refuses a settings.json whose hook pairs are decoys"
+    else
+        bad "verify-guard reported exit $VG_RC for a config whose only live hook matches Read:"
+        sed 's/^/          /' "$vg/out.txt"
+    fi
+
+    # --- W2: a list SUBSTITUTED rather than shortened ------------------------
+    # The floor was a count, so it caught deletion and not replacement. Keeping the
+    # twelve commands verify-guard exercises and replacing the other forty-four
+    # with junk -- same line count -- produced GUARD: verified while `npm ci`,
+    # `yarn install`, `poetry add`, `pipx install` and six more were wide open.
+    cp "$vg/.claude/settings.json.bak" "$vg/.claude/settings.json" 2>/dev/null
+    gi2="$vg/.claude/hooks/guard-installs.sh"
+    awk '
+        /^INSTALL_COMMANDS="npm install$/ {
+            print "INSTALL_COMMANDS=\"npm install"
+            print "yarn add";   print "dotnet add package"; print "pip install"
+            print "go get";     print "npx";                print "pnpm add"
+            print "cargo add";  print "bun install";        print "gem install"
+            print "composer require"; print "npm --silent install"
+            for (i = 0; i < 44; i++) printf "zzjunk%02d\n", i
+            print "\""
+            cut = 1; next
+        }
+        cut && /^dart pub add"$/ { cut = 0; next }
+        cut { next }
+        { print }
+    ' "$gi2" > "$gi2.new" && mv "$gi2.new" "$gi2"
+    vg_run
+    if [ "$VG_RC" = 1 ] && grep -q 'does not match the digest' "$vg/out.txt"; then
+        ok "verify-guard catches a guard list whose entries were REPLACED, not removed"
+    else
+        bad "verify-guard reported exit $VG_RC for a 56-entry list with 44 junk entries:"
+        sed 's/^/          /' "$vg/out.txt"
+    fi
 fi
 rm -rf "$vg"
 
@@ -1147,6 +1240,55 @@ else
         ok "check-stubs.sh counts 0 on a tree with no markers at all"
     else
         bad "check-stubs.sh counted [$zero] on a tree with no markers -- expected exactly 0"
+    fi
+
+    # --- W4: a scan that FAILED must not read as a clean tree ----------------
+    # The ratchet's dangerous direction is not "wrong number", it is "zero". When
+    # the enumeration or the scan fails, nothing is printed, `wc -l` says 0, and
+    # the ratchet reports "improved" and invites you to write 0 into the PINNED
+    # baseline -- after which no marker anywhere can ever fail it again. Two ways
+    # in, both of which reported a clean tree:
+    #
+    #   ARG_MAX   the whole file list went to ONE exec. Measured on 1202 files with
+    #             1810-byte paths: grep never ran, its "Argument list too long" went
+    #             to a discarded stderr, and --count printed 0 against a real marker.
+    #   no repo   `git ls-files` in a non-repository lists nothing, which is
+    #             indistinguishable from a repository containing nothing.
+    #
+    # ARG_MAX itself is too slow to reproduce in this suite (it needs ~2 MB of
+    # paths). The non-repository case exercises the same refusal, and both now exit
+    # 4 rather than printing a number.
+    norepo="${TMPDIR:-/tmp}/sdlc-norepo.$$"
+    rm -rf "$norepo"; mkdir -p "$norepo"
+    printf '// TODO: invisible\n' > "$norepo/a.ts"
+    nr_out=$(cd "$norepo" && sh "$REPO/tooling/gate/check-stubs.sh" --count 2>&1); nr_rc=$?
+    if [ "$nr_rc" != 0 ] && ! printf '%s' "$nr_out" | grep -qx '0'; then
+        ok "check-stubs.sh refuses to report 0 when it could not read the tree"
+    else
+        bad "check-stubs.sh returned rc=$nr_rc [$nr_out] outside a git repository -- a failed scan must not read as a clean tree"
+    fi
+    rm -rf "$norepo"
+
+    # A UTF-16 source file stores TODO as T\0O\0D\0O\0, so a byte-oriented scan
+    # cannot match it and the file contributes zero -- silently. That is an
+    # ordinary artefact of a Windows editor, and Windows is the primary platform.
+    if command -v iconv >/dev/null 2>&1; then
+        wide="${TMPDIR:-/tmp}/sdlc-wide.$$"
+        rm -rf "$wide"; mkdir -p "$wide/src"
+        if (cd "$wide" && git init -q . 2>/dev/null); then
+            printf '// TODO: a\n// TODO: b\n' | iconv -f UTF-8 -t UTF-16 > "$wide/src/w.ts" 2>/dev/null
+            w_out=$(cd "$wide" && sh "$REPO/tooling/gate/check-stubs.sh" --count 2>&1); w_rc=$?
+            if [ "$w_rc" != 0 ] && printf '%s' "$w_out" | grep -q 'UTF-16'; then
+                ok "check-stubs.sh refuses a UTF-16 source rather than counting it as zero"
+            else
+                bad "check-stubs.sh returned rc=$w_rc [$w_out] on a UTF-16 source -- its markers would leave the ratchet unnoticed"
+            fi
+        else
+            meh "UTF-16 refusal (could not create a scratch repository)"
+        fi
+        rm -rf "$wide"
+    else
+        meh "UTF-16 refusal (iconv not installed)"
     fi
 
     # ...and the baseline it writes from that count has to be a number the next

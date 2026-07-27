@@ -32,6 +32,80 @@ including detection of local edits that an upgrade would overwrite.
 
 ## 2.3.0 (unreleased)
 
+### The self-verification stops certifying things it never checked
+
+Three controls reported success while the thing they check was broken. All three
+are in the two files a consuming project is left alone with — `verify-guard.sh`,
+which is the *only* mechanical check an installed project gets, and the stub
+ratchet, whose dangerous failure direction is not "wrong number" but "zero".
+
+**`verify-guard` read hook pairs from outside `hooks.PreToolUse`.** The pair
+extractor was a boolean flag set by any line matching `/"PreToolUse"/`, with no
+idea where in the document it was. `settings.json` already ships a top-level
+`$comment`, so an `$examples` sibling holding a well-formed hook block is
+idiomatic rather than suspicious — and this was certified:
+
+```
+"$examples": { "PreToolUse": { "file guard": {
+    "matcher": "Edit|MultiEdit|Write|NotebookEdit",
+    "command": "sh .claude/hooks/guard-packages.sh" } } },
+"hooks": { "PreToolUse": [ { "matcher": "Read", "hooks": [ ... ] } ] }
+```
+
+What Claude Code installs there is one hook on `Read`, which edits nothing, and no
+`Bash` matcher at all: every manifest edit and every install command unguarded,
+`GUARD: verified`, CI green. The extractor now counts brace depth and accepts
+pairs only inside the real subtree; a `matcher` or `command` key anywhere else is
+a hard failure rather than an ingredient. Minified JSON is refused by name instead
+of being misread.
+
+**The guard-list floors were counts, so substitution beat them.** Round 4 added
+`GUARDED_FLOOR=86` / `INSTALL_FLOOR=56` to stop an 85% cut being certified. A
+count detects deletion and not replacement: keeping the twelve commands
+`verify-guard` exercises, replacing the other forty-four with `zzjunk00`, and
+leaving the line count at 56 produced two `PASS` lines and `GUARD: verified` while
+`npm ci`, `yarn install`, `uv add`, `poetry add`, `bundle add`, `conda install`,
+`pipx install`, `go install`, `yarn upgrade` and `pnpm dlx` were all open. Both
+lists are now pinned by **SHA-256 digest** — four of them, because the configured
+command may name either twin and the shipped default names the `.ps1`, so the
+PowerShell lists are covered for the first time. Regenerate with
+`sh .claude/hooks/verify-guard.sh --print-digests`. Where no digest tool exists
+the script falls back to the count, says so, and exits **3** rather than 0.
+
+**The stub ratchet reported a clean tree when the scan failed.** The whole file
+list went to a single `exec` with `grep`'s stderr discarded, so a repository large
+enough to exceed `ARG_MAX` produced no output, `wc -l` said 0, and the ratchet
+printed `STUBS: 0 (baseline 5) — improved` and invited the user to write `0` into
+the **pinned** baseline. Measured on 1202 files with 1810-byte paths and one real
+marker: `--count` → `0`, rc 0. Now batched through `xargs -0`, with grep's stderr
+treated as fatal. Two more silent-zero paths closed with it: `git ls-files`
+listing nothing (not a repository, versus a repository containing nothing — not
+the same answer) and **UTF-16 source files**, which store `TODO` as
+`T\0O\0D\0O\0` and are invisible to a byte-oriented scan. `-a` fixes the NUL-byte
+case; the UTF-16 case is refused rather than undercounted, because a Windows
+editor produces those by accident.
+
+A note on the fix for the fix: the first version of the stub-ratchet change put
+`exit 4` inside `all_stub_lines`, which runs on the **left of a pipeline** and in a
+command substitution — so it exited a subshell and the script carried on to report
+a clean tree. Exactly the failure being removed, reintroduced by its own remedy.
+There is now a sentinel file and an `assert_scan_ok` the main shell calls.
+
+Six new assertions, each verified to fail with its fix reverted: the decoy config,
+the substituted list, the unreadable tree, the UTF-16 source, and — closing a
+vacuity finding of its own — a mutation of `guard-packages`, because every
+existing `verify-guard` assertion mutated `guard-installs`, so deleting
+`verify-guard`'s entire 57-line manifest half left the suite byte-identical.
+
+**Upgrade actions**
+
+| Action | What |
+|---|---|
+| **Re-copy** | `.claude/hooks/verify-guard.sh` and `.ps1`, `check-stubs.sh` and `.ps1` |
+| **Check by hand, once** | run `sh .claude/hooks/verify-guard.sh`. Exit 3 now has two distinct causes — the configured interpreter being absent, or no digest tool on the machine — and each says which |
+| **Check by hand, once** | if you have edited either guard list in your project, `--print-digests` and paste the four constants, or `verify-guard` will correctly report your own edit as tampering |
+| **Expect** | the ratchet to now FAIL rather than report 0 on a repo it cannot read, and to refuse UTF-16 sources. If a UTF-16 file is legitimate, convert it or set `working-tree-encoding` in `.gitattributes` |
+
 ### Four hosting platforms, and the CI gate becomes a script
 
 **Breaking: `tooling/ci/gate.yml` and `tooling/ci/CODEOWNERS` are gone.** CI was

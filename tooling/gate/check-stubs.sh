@@ -146,8 +146,62 @@ is_source() {  # is_source <path>
 # NAMED LIKE A FLAG becomes one: with `-q` in the tree grep went quiet and the
 # count fell to zero, `-i` re-enabled the case-insensitive matching this pair was
 # rewritten to remove, and `-e` swallowed the pattern. A filename is data.
+#
+# GREP'S STDERR IS FATAL, NOT DISCARDED. `2>/dev/null` here was hiding the two
+# ways this function can fail while still exiting 0:
+#
+#   Argument list too long   the whole file list was passed to one exec, so a
+#         large repository exceeded ARG_MAX. grep never ran, wrote to a stream
+#         nobody read, and the trailing `grep -vE` succeeded -- so the ratchet
+#         reported STUBS: 0, printed "improved", exited 0, and invited the user to
+#         write 0 into the PINNED baseline. Measured on a synthetic repo: 1202
+#         files, 2.18 MB of paths, one real marker, `--count` -> 0.
+#   binary file matches      grep's notice goes to STDERR with exit status 0 and
+#         the matching lines never reach stdout, so a UTF-16 source file -- an
+#         ordinary artefact of a Windows editor -- contributed nothing to the
+#         count. `-a` makes grep treat every input as text, which is what a marker
+#         scan wants.
+#
+# A control that cannot determine an answer must block, never allow. Both of those
+# were "report perfection", which is the one direction this framework's own
+# non-functional requirements forbid outright.
+# A SENTINEL FILE, not just `exit 4`.
+#
+# `count_stubs` is `all_stub_lines | wc -l`, and the left-hand side of a pipeline
+# runs in a SUBSHELL. An `exit 4` in there kills the subshell and nothing else:
+# `wc -l` then reads the empty stream, prints 0, and the script carries on to
+# report a clean tree -- the precise failure this whole change exists to remove,
+# reintroduced by the fix for it. The flag file crosses the subshell boundary; the
+# callers check it after the pipeline has finished.
+SCAN_FAIL="${TMPDIR:-/tmp}/check-stubs-failed.$$"
+rm -f "$SCAN_FAIL"
+
+scan_failed() {  # scan_failed <stderr file>
+    echo "check-stubs: the marker scan failed and its output cannot be trusted:" >&2
+    sed 's/^/  /' "$1" >&2
+    echo "  Refusing to report a count. A scan that errors and returns nothing" >&2
+    echo "  looks exactly like a clean tree, which is how a ratchet turns itself off." >&2
+    rm -f "$1"
+    : > "$SCAN_FAIL"
+    exit 4
+}
+
+# Call after any pipeline OR command substitution whose inner shell may have
+# called scan_failed. It deliberately does NOT clear the flag: `current=$(count_stubs)`
+# is itself a subshell, so the check inside count_stubs exits that subshell and the
+# main shell has to ask again. Clearing on the first ask would answer "fine" to the
+# second. The flag is cleared once, at startup, and on the successful paths out.
+assert_scan_ok() {
+    [ -f "$SCAN_FAIL" ] && exit 4
+    return 0
+}
+
 stub_lines() {  # stub_lines <file>...
-    grep -nHE "$MARKERS" -- "$@" 2>/dev/null | grep -vE "$EXEMPT"
+    _err="${TMPDIR:-/tmp}/check-stubs-err.$$"
+    : > "$_err"
+    grep -anHE "$MARKERS" -- "$@" 2>"$_err" | grep -vE "$EXEMPT"
+    [ -s "$_err" ] && scan_failed "$_err"
+    rm -f "$_err"
 }
 
 # Every tracked-or-untracked path, ONE PER LINE, whatever is in the name.
@@ -179,29 +233,97 @@ tracked_paths() {
 
 SOH=$(printf '\001')
 
-# ONE grep over the whole list rather than one per file. Two forks per file took
-# thirty seconds on a repository of eighty files, and this script runs inside the
-# gate, which is meant to be run often. `-H` forces the filename prefix even when
-# the list happens to be one file, so the output shape does not change with the
-# size of the repo -- and it is the shape check-stubs.ps1 prints too.
+# ONE grep per BATCH rather than one per file. Two forks per file took thirty
+# seconds on a repository of eighty files, and this script runs inside the gate,
+# which is meant to be run often. `-H` forces the filename prefix even when a batch
+# happens to be one file, so the output shape does not change with the size of the
+# repo -- and it is the shape check-stubs.ps1 prints too.
 #
-# The list is built in the POSITIONAL PARAMETERS rather than in a string: `$@`
-# survives spaces, quotes and glob characters that word-splitting a variable
-# cannot. A here-doc redirect (not a pipe) keeps the loop in this shell so the
-# accumulated `$@` outlives it.
+# BATCHED THROUGH xargs, NOT ACCUMULATED INTO `$@`. The previous version built the
+# entire file list into the positional parameters and handed it to a single exec.
+# That is correct for spaces, quotes and globs -- and it breaks at ARG_MAX, where
+# the exec never happens at all. Because grep's stderr was discarded and the
+# trailing filter still succeeded, a repository too large to scan reported zero
+# markers and passed. `xargs -0` splits the list into as many execs as the system
+# allows, which removes the ceiling; `-r` stops it running grep at all on an empty
+# list, so a genuinely empty selection produces no output rather than a scan of the
+# current directory.
+#
+# The NUL-delimited stream feeds xargs directly, so no re-quoting happens anywhere:
+# a path containing a space, a quote, a backslash or a glob character survives.
+# Newlines inside paths are still folded to \001 by tracked_paths for the `is_source`
+# loop and unfolded here before the path is emitted.
+#
+# grep exits 1 when a batch has no match, and xargs turns any non-zero child status
+# into 123. Neither is an error for us -- most batches legitimately contain no
+# markers -- so the status is ignored here and correctness is enforced by
+# stub_lines' stderr check instead, which fires on the failures that actually
+# matter.
 all_stub_lines() {
-    set --
+    _list="${TMPDIR:-/tmp}/check-stubs-list.$$"
+    _err="${TMPDIR:-/tmp}/check-stubs-err.$$"
+    : > "$_list"; : > "$_err"
+
     while IFS= read -r _line; do
         [ -n "$_line" ] || continue
         case "$_line" in *"$SOH"*) _line=$(printf '%s' "$_line" | tr '\1' '\n') ;; esac
         is_source "$_line" || continue
         [ -f "$_line" ] || continue
-        set -- "$@" "$_line"
+        printf '%s\0' "$_line" >> "$_list"
     done <<EOF
 $(tracked_paths)
 EOF
-    [ "$#" -gt 0 ] || return 0
-    stub_lines "$@"
+
+    if [ ! -s "$_list" ]; then
+        # No source files selected. Legitimate on a docs-only repo, and NOT
+        # legitimate when the enumeration itself failed -- and those two look
+        # identical from here, so distinguish them: if git listed nothing at all,
+        # this is not a repository we can scan and saying "0 markers" would be a
+        # verdict about a tree we never read.
+        if [ -z "$(tracked_paths | head -c 1)" ]; then
+            echo "check-stubs: git listed no files in this directory." >&2
+            echo "  Either this is not a git repository, or the working tree is empty." >&2
+            echo "  Refusing to report 0 markers: a scan that saw nothing and a tree" >&2
+            echo "  with nothing in it are not the same answer." >&2
+            rm -f "$_list" "$_err"
+            : > "$SCAN_FAIL"
+            exit 4
+        fi
+        rm -f "$_list" "$_err"
+        return 0
+    fi
+
+    # A UTF-16 source file is unreadable to a byte-oriented marker scan: `TODO`
+    # is stored as T\0O\0D\0O\0, so the pattern cannot match and the file
+    # contributes zero. That is an ordinary artefact of a Windows editor, and
+    # Windows is this framework's primary platform -- so `mv` a file into UTF-16
+    # and its markers leave the ratchet. `-a` fixes the NUL-byte case (grep used to
+    # call those files binary, write a notice to stderr and print nothing) but it
+    # cannot fix an encoding. Refuse instead of undercounting in silence.
+    _wide=$(xargs -0 -r sh -c '
+        for f do
+            case $(od -An -N2 -tx1 <"$f" 2>/dev/null | tr -d " ") in
+                fffe|feff) printf "%s\n" "$f" ;;
+            esac
+        done' _ < "$_list" 2>/dev/null)
+    if [ -n "$_wide" ]; then
+        echo "check-stubs: these source files are UTF-16 and cannot be scanned for markers:" >&2
+        printf '%s\n' "$_wide" | sed 's/^/  /' >&2
+        echo "  A UTF-16 file stores TODO as T\\0O\\0D\\0O\\0, so every marker in it is" >&2
+        echo "  invisible to this scan and would silently leave the ratchet." >&2
+        echo "  Convert them to UTF-8 (git can do it: 'working-tree-encoding=UTF-16'" >&2
+        echo "  in .gitattributes keeps the editor happy and the repository readable)." >&2
+        rm -f "$_list" "$_err"
+        : > "$SCAN_FAIL"
+        exit 4
+    fi
+
+    xargs -0 -r grep -anHE "$MARKERS" -- < "$_list" 2>"$_err" | grep -vE "$EXEMPT"
+    if [ -s "$_err" ]; then
+        rm -f "$_list"
+        scan_failed "$_err"
+    fi
+    rm -f "$_list" "$_err"
 }
 
 # `wc -l`, not `grep -c ''`. `grep -c` prints 0 AND EXITS 1 when nothing matches,
@@ -213,7 +335,9 @@ EOF
 # fell through to `exit 0`, so the ratchet passed inertly. `wc -l` exits 0 on
 # empty input and has no such second channel.
 count_stubs() {
-    all_stub_lines | wc -l | tr -d ' '
+    _n=$(all_stub_lines | wc -l | tr -d ' ')
+    assert_scan_ok
+    printf '%s' "$_n"
 }
 
 # --- test-support modes -----------------------------------------------------
@@ -236,6 +360,12 @@ if [ "${1:-}" = "--scan" ]; then
 fi
 
 current=$(count_stubs)
+# Asked again in the MAIN shell. The line above is a command substitution, so an
+# `exit` inside count_stubs ends that subshell and nothing more -- which is how the
+# first version of this very fix still reported a clean tree on a repository it had
+# failed to read.
+assert_scan_ok
+rm -f "$SCAN_FAIL"
 
 if [ "${1:-}" = "--count" ]; then
     echo "$current"
@@ -273,6 +403,7 @@ if [ "$current" -gt "$baseline" ]; then
     echo "  a bare 'approved-stub:' with nothing after it does not exempt anything."
     echo
     all_stub_lines | sed 's|^|  |'
+    assert_scan_ok
     exit 1
 fi
 
