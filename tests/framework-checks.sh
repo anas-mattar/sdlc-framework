@@ -1408,6 +1408,42 @@ else
         bad "check-stubs.sh counted [$zero] on a tree with no markers -- expected exactly 0"
     fi
 
+    # --- W7: the exemption belongs to the TEXT, not the path -----------------
+    # `grep -H` prefixes each match with `<path>:<lineno>:` and the exemption filter
+    # ran over the whole line, so the string only had to appear SOMEWHERE. One
+    # `git mv` into a directory named `approved-stub: deferred` removed every marker
+    # beneath it from the ratchet, silently and without limit -- and it was a
+    # divergence too: the .sh counted 1 where check-stubs.ps1, which filters the line
+    # text only, counted 4.
+    #
+    # Both halves are asserted: that the directory name does NOT exempt, and that a
+    # real per-line exemption still does. Testing only the first would pass on a
+    # build that had lost the exemption altogether.
+    exdir="${TMPDIR:-/tmp}/sdlc-exdir.$$"
+    rm -rf "$exdir"; mkdir -p "$exdir/src/approved-stub: deferred"
+    if (cd "$exdir" && git init -q . 2>/dev/null) && [ -d "$exdir/src/approved-stub: deferred" ]; then
+        printf '// TODO: a\n// TODO: b\n// FIXME: c\n' > "$exdir/src/approved-stub: deferred/real.ts"
+        printf '// TODO: counted\n' > "$exdir/src/plain.ts"
+        got_ex=$(cd "$exdir" && sh "$REPO/tooling/gate/check-stubs.sh" --count 2>/dev/null)
+        if [ "$got_ex" = "4" ]; then
+            ok "a directory named 'approved-stub: ...' does not exempt the files inside it"
+        else
+            bad "check-stubs.sh counted [$got_ex] where 4 markers exist -- a directory name is exempting its contents"
+        fi
+        # And the legitimate form still works: same tree, marker exempted per line.
+        rm -rf "$exdir/src/approved-stub: deferred"
+        printf '// TODO: counted\n// TODO: waived approved-stub: deferred to phase 3\n' > "$exdir/src/plain.ts"
+        got_ok=$(cd "$exdir" && sh "$REPO/tooling/gate/check-stubs.sh" --count 2>/dev/null)
+        if [ "$got_ok" = "1" ]; then
+            ok "an approved-stub reason on the LINE still exempts that marker"
+        else
+            bad "check-stubs.sh counted [$got_ok], expected 1 -- the per-line exemption has stopped working"
+        fi
+    else
+        meh "approved-stub scoping (could not create the scratch tree)"
+    fi
+    rm -rf "$exdir"
+
     # --- W4: a scan that FAILED must not read as a clean tree ----------------
     # The ratchet's dangerous direction is not "wrong number", it is "zero". When
     # the enumeration or the scan fails, nothing is printed, `wc -l` says 0, and

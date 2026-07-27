@@ -160,13 +160,13 @@ unpinned=0      # the lists could only be counted, not pinned by digest
 # Regenerate after a legitimate list change with:
 #     sh .claude/hooks/verify-guard.sh --print-digests
 GUARDED_DIGEST_SH=c68dc68623405006f36b034cf73dcc70282b0442ec9af1eaed1e5b6f3c0980a7
-INSTALL_DIGEST_SH=37c9426ef80866a630e7304f8460545140eb3e14fc0108924c1fe42baf37e979
+INSTALL_DIGEST_SH=704bb73f2bf79e6ed895603f7a46718ec1900b33d0a1129d4d198e404617875d
 GUARDED_DIGEST_PS1=04617cf3a9f4d77f189fc678f38dab71890c74897cde76a2e7bd608c4a3a5aff
-INSTALL_DIGEST_PS1=2e5f65bd2e5bc60e89d126d7f2ca08afcdee72bd3ec27bb8d88d4cd0a3843843
+INSTALL_DIGEST_PS1=ece8b32bc36ed29552439b3865cace270d469fddb5cc63e7486ec848e331f0c9
 # Kept as a floor of last resort for the no-digest-tool case below. These are not
 # the assertion any more; they are what is left when there is nothing to hash with.
 GUARDED_FLOOR=86
-INSTALL_FLOOR=56
+INSTALL_FLOOR=63
 
 # No digest tool is guaranteed. coreutils gives sha256sum, macOS gives
 # `shasum -a 256`, and openssl is usually somewhere. If none of the three exists we

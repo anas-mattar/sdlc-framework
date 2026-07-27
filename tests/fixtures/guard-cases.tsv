@@ -137,3 +137,36 @@ installs	2	{"tool_name":"Bash","tool_input":{"command":["npm","install","x"]}}	a
 packages	2	{"tool_input":{"file_path":["package.json"]}}	the same, for the file guard
 installs	2	{"tool_name":"Bash","tool_input":{"command":"ls","command":"npm install evil"}}	duplicate keys: both must take the LAST
 installs	0	{"tool_name":"Bash","tool_input":{"command":"npm install evil","command":"ls"}}	duplicate keys the other way round
+
+# --- round-5 findings W5, W6, W11, W12 -------------------------------------
+# Added BEFORE the fixes, per this file's own instruction. Every row below
+# failed when it was written.
+installs	2	{"tool_name":"Bash","tool_input":{"command":"npm in\"stall\" left-pad"}}	W5 a quote INSIDE a word still resolves to npm install
+installs	2	{"tool_name":"Bash","tool_input":{"command":"n\"p\"m install left-pad"}}	W5 the same, in the tool name
+installs	2	{"tool_name":"Bash","tool_input":{"command":"pip in'stall' requests"}}	W5 single quotes, likewise
+installs	2	{"tool_name":"Bash","tool_input":{"command":"n\\pm install left-pad"}}	W5 a backslash inside a word is removed by the shell
+installs	2	{"tool_name":"Bash","tool_input":{"command":"cargo a\\dd serde"}}	W5 the same, in a subcommand
+installs	2	{"tool_name":"Bash","tool_input":{"command":"rm -rf .cla*"}}	W5 a glob that removes the whole perimeter
+installs	2	{"tool_name":"Bash","tool_input":{"command":"rm -rf .c*"}}	W5 a shorter glob, same effect
+installs	2	{"tool_name":"Bash","tool_input":{"command":"rm -rf .clau?e"}}	W5 a single-character wildcard
+installs	2	{"tool_name":"Bash","tool_input":{"command":"mv .cla* /tmp/"}}	W5 a glob that moves it away instead
+installs	2	{"tool_name":"Bash","tool_input":{"command":"rm -rf .cl'a'ude"}}	W5 a quote inside a perimeter path
+installs	2	{"tool_name":"Bash","tool_input":{"command":"cp -t.claude/hooks/ /tmp/x"}}	W6 the directory attached to the short option
+installs	2	{"tool_name":"Bash","tool_input":{"command":"cp --targ=.claude/hooks/ /tmp/x"}}	W6 an unambiguous long-option abbreviation
+packages	2	{"tool_name":"Write","tool_input":{"file_path":"package.json "}}	W11 a trailing space Win32 strips
+packages	2	{"tool_name":"Write","tool_input":{"file_path":"package.json."}}	W11 a trailing dot, likewise
+packages	2	{"tool_name":"Write","tool_input":{"file_path":"Gemfile."}}	W11 and on a file with no extension
+packages	2	{"tool_name":"Write","tool_input":{"file_path":".claude/settings.json "}}	W11 the guard's own configuration
+packages	2	{"tool_name":"Write","tool_input":{"file_path":".claude/allow-package-changes "}}	W11 one call would disable both guards permanently
+installs	2	{"tool_name":"Bash","tool_input":{"command":"npm exec -- cowsay"}}	W12 npx's documented modern spelling
+installs	2	{"tool_name":"Bash","tool_input":{"command":"npm x cowsay"}}	W12 and its alias, cf. bun x which IS listed
+installs	2	{"tool_name":"Bash","tool_input":{"command":"go mod tidy"}}	W12 rewrites go.mod and go.sum
+installs	2	{"tool_name":"Bash","tool_input":{"command":"go mod download"}}	W12 likewise
+installs	2	{"tool_name":"Bash","tool_input":{"command":"dotnet restore"}}	W12 resolves and writes lock state
+installs	2	{"tool_name":"Bash","tool_input":{"command":"cargo fetch"}}	W12 likewise
+installs	0	{"tool_name":"Bash","tool_input":{"command":"cp .claude/settings.json /tmp/backup.json"}}	reading OUT of the perimeter is still allowed
+installs	0	{"tool_name":"Bash","tool_input":{"command":"rm -rf node_modules"}}	a glob-free path outside the perimeter
+installs	0	{"tool_name":"Bash","tool_input":{"command":"rm -rf dist/*"}}	a glob outside the perimeter
+installs	0	{"tool_name":"Bash","tool_input":{"command":"go build ./..."}}	go, but not a dependency subcommand
+installs	0	{"tool_name":"Bash","tool_input":{"command":"dotnet build"}}	dotnet, but not restore
+packages	0	{"tool_name":"Write","tool_input":{"file_path":"docs/notes-package.json"}}	a manifest name buried in a longer filename

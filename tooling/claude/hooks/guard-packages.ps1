@@ -64,7 +64,20 @@ if (-not $name) { exit 0 }
 # Claude Code reports Windows paths with backslashes, and they may arrive doubled,
 # so fold and then squeeze the repeats -- otherwise none of the patterns below
 # match on the platform this guard is shipped configured for.
-$norm = ($filePath -replace '\\', '/') -replace '/+', '/'
+# TRAILING SPACES AND DOTS ARE STRIPPED PER COMPONENT, because Win32 strips them
+# when it opens the file -- and this is the twin that RUNS on Windows, which is the
+# platform settings.json ships configured for. `package.json ` and `package.json.`
+# both resolve to `package.json`; `.claude/allow-package-changes ` resolves to the
+# approval marker, so one Write with a trailing space created the file that
+# disables both guards permanently. The guard returned 0 for every such path.
+#
+# Strip BEFORE squeezing slashes: `src/../package.json` would otherwise become
+# `src//package.json`, because `../` collapses to `/` after the squeeze has run, and
+# the directory-shaped patterns (`.cargo/config.toml`) are matched against the whole
+# path. A component of `.` or `..` is stripped with the rest, so `./package.json`
+# normalises to `/package.json` -- only ever used for matching, never to open a
+# file, and `*/package.json` matches it. Kept in step with guard-packages.sh.
+$norm = ((($filePath -replace '\\', '/') -replace '[ .]*/', '/') -replace '[ .]*$', '') -replace '/+', '/'
 foreach ($self in @('*.claude/allow-package-changes', '*.claude/settings*.json', '*.claude/hooks/*')) {
     if ($norm -like $self) {
         [Console]::Error.WriteLine("BLOCKED: '$filePath' is part of the package guard itself (its approval marker, its configuration, or its hook script). Only a human creates or edits these. If package changes are genuinely approved in the feature's plan.md (or spec.md at Small tier), ask the user to create the marker -- do not create it yourself.")

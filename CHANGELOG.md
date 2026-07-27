@@ -32,6 +32,80 @@ including detection of local edits that an upgrade would overwrite.
 
 ## 2.3.0 (unreleased)
 
+### The last five findings: globs, quotes, `cp`, trailing dots, and the exemption's scope
+
+Five bypasses, none critical on its own, all in the two guards and the ratchet.
+**29 fixture rows were added before any of them was fixed** — 23 failed on the first
+run — and the behavioural fixture is now 128 cases.
+
+**A glob never contains the string it matches.** The perimeter was tested with a
+literal substring, so `rm -rf .cla*` removed `.claude` entirely while never
+mentioning it. Verified as ordinary shell, not evasion syntax:
+
+```
+$ ls -a          .  ..  .claude
+$ rm -rf .cla*
+$ ls -a          .  ..
+```
+
+Any word carrying `*`, `?` or `[` is now checked by its non-glob prefix: `.cla*` →
+`.cla` is a prefix of `.claude`, so it is a hit; `dist/*` → `dist/` is not. A bare
+`*` has an empty prefix, which is a prefix of everything, so it blocks — `rm -rf *`
+at the project root really would take the perimeter with it.
+
+**A quote inside a word is removed by the shell, not treated as a separator.** The
+normaliser mapped `"` and `'` to a *space*, which is right at a word boundary and
+exactly wrong inside one: `npm in"stall" x` became `npm in stall x`, so the word
+`install` existed in no haystack and no pattern could match. A backslash failed from
+the other side — mapped to `/` for path stripping, `n\pm install x` became
+`n/pm install x` and the path rule then deleted the word. There are now six
+haystacks: three with those characters translated, three with them **deleted**.
+
+**Enumerating option spellings loses to a tool with abbreviation matching.** The
+round-4 fix listed `-t`, `--target-directory` and `-*t`; GNU `cp` also takes the
+directory attached to the short option and any unambiguous long-option
+abbreviation. `cp -t.claude/hooks /tmp/x` and `cp --targ=.claude/hooks/ /tmp/x`
+both overwrote a hook. Inverted: any `cp` segment carrying an option at all treats
+a perimeter path as a destination. `cp -v <perimeter> /tmp/out` is now over-blocked,
+which is the direction this guard is documented to fail in.
+
+**Win32 strips trailing spaces and dots when it opens a file.** So
+`package.json `, `package.json.`, `Gemfile.` and — worst — `.claude/allow-package-changes `
+all reached the real file while the guard returned 0. One `Write` with a trailing
+space created the marker that disables both guards permanently, on the platform
+`settings.json` ships configured for. Now stripped per component, before the slash
+squeeze rather than after (squeezing first turned `src/../package.json` into
+`src//package.json`, and the directory-shaped patterns are matched against the
+whole path).
+
+**The stub exemption was matched against the path.** `grep -H` prefixes each match
+with `<path>:<lineno>:`, and the filter ran over the whole line — so
+`git mv src/ledger.ts 'src/approved-stub: deferred/'` removed every marker beneath
+that directory from the ratchet, silently and without limit. The same "a rename is
+not a code-review event" argument this framework already makes about
+`latest-ledger.ts`. It was also a divergence: the `.sh` counted 1 where the `.ps1`,
+which filters the line text only, counted 4. The prefix is now stripped before the
+exemption is applied, located by the `:<digits>:` field so a path containing a
+colon cannot shift the split.
+
+**Seven install patterns added** — `npm exec`, `npm x`, `go mod tidy`,
+`go mod download`, `dotnet restore`, `dotnet tool restore`, `cargo fetch`. Each is a
+sibling of a pattern already listed, reached by the spelling the tool's own
+documentation uses; `npx` was guarded while `npm exec`, its documented modern
+equivalent, was not. The list is 56 → 63 and **all four digests were regenerated**.
+
+Every fix landed on both twins in the same change, and each was verified to fail
+with its fix reverted. Suite: 100 passing, 0 failing.
+
+**Upgrade actions**
+
+| Action | What |
+|---|---|
+| **Re-copy** | `.claude/hooks/guard-installs.{sh,ps1}`, `guard-packages.{sh,ps1}`, `verify-guard.{sh,ps1}`, `check-stubs.{sh,ps1}` |
+| **Expect** | `cp -v <perimeter> /tmp/out` to be blocked now. Copy without options, or read with `cat` |
+| **Expect** | a wider install block: `dotnet restore` and `go mod tidy` were previously allowed and now need approval, which is a behaviour change in day-to-day work |
+| **Check by hand, once** | any `approved-stub:` you relied on. If a *directory* name was carrying the exemption, its markers now count and the ratchet will fail until you baseline or exempt them per line |
+
 ### The self-verification stops certifying things it never checked
 
 Three controls reported success while the thing they check was broken. All three

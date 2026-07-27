@@ -196,10 +196,46 @@ assert_scan_ok() {
     return 0
 }
 
+#
+# THE EXEMPTION APPLIES TO THE MATCHED TEXT, NEVER TO THE PATH. `grep -H` prefixes
+# every match with `<path>:<lineno>:`, and running the exemption filter over the
+# whole line meant the string only had to appear SOMEWHERE:
+#
+#     mkdir -p 'src/approved-stub: deferred'
+#     git mv src/ledger.ts 'src/approved-stub: deferred/'
+#
+# and every marker in every file beneath that directory left the ratchet, silently.
+# One `git mv` into a plausibly-named folder, no message, unlimited scope -- the
+# same "a rename is not a code-review event" argument this file already makes about
+# `latest-ledger.ts`. It was also a divergence: check-stubs.ps1 filters `$_.Line`,
+# so the shell counted 1 where PowerShell counted 4.
+#
+# The prefix is stripped with awk rather than `cut -d:`, because a path may contain
+# a colon: the first two colon-delimited fields are dropped only after the known
+# line-number field is located, and the remainder -- the actual source line -- is
+# what the exemption sees. The path is still printed, because callers parse it.
+exempt_filter() {
+    awk -v ex="$EXEMPT" '
+        {
+            # Find `:<digits>:` -- the line-number field grep inserts. Search from
+            # the left and take the FIRST such field, so a path containing digits
+            # between colons cannot shift the split.
+            rest = $0; off = 0
+            while (match(rest, /:[0-9]+:/)) {
+                off += RSTART + RLENGTH - 1
+                break
+            }
+            if (off == 0) { print; next }          # not grep -nH output; pass through
+            text = substr($0, off + 1)
+            if (text ~ ex) next                    # exempted, on the TEXT alone
+            print
+        }'
+}
+
 stub_lines() {  # stub_lines <file>...
     _err="${TMPDIR:-/tmp}/check-stubs-err.$$"
     : > "$_err"
-    grep -anHE "$MARKERS" -- "$@" 2>"$_err" | grep -vE "$EXEMPT"
+    grep -anHE "$MARKERS" -- "$@" 2>"$_err" | exempt_filter
     [ -s "$_err" ] && scan_failed "$_err"
     rm -f "$_err"
 }
@@ -318,7 +354,7 @@ EOF
         exit 4
     fi
 
-    xargs -0 -r grep -anHE "$MARKERS" -- < "$_list" 2>"$_err" | grep -vE "$EXEMPT"
+    xargs -0 -r grep -anHE "$MARKERS" -- < "$_list" 2>"$_err" | exempt_filter
     if [ -s "$_err" ]; then
         rm -f "$_list"
         scan_failed "$_err"

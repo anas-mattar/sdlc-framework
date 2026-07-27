@@ -84,6 +84,30 @@ function Squeeze([string]$s) {
 $hay2 = Squeeze ($hay -replace ' -[^ ]*', ' ')
 $hay3 = Squeeze ($hay -replace ' -[^ ]* [^ ]*', ' ')
 
+# Three MORE views, with quotes and backslashes DELETED rather than translated.
+#
+# $base maps a quote to a SPACE. That is right for a quote at a word boundary --
+# `npm "install" x` squeezes back to `npm install x` -- and exactly wrong for a
+# quote INSIDE a word, which the shell removes rather than treating as a separator.
+# `npm in"stall" x` became `npm in stall x`, so the word `install` never existed in
+# any haystack and no pattern could match. A backslash had the same problem from
+# the other direction: $base maps it to `/` for path stripping, so `n\pm install x`
+# became `n/pm install x` and the `[^ ]*/` rule then deleted the whole word.
+#
+# Both are ordinary shell:
+#     sh -c 'echo npm in"stall" x'   ->  npm install x
+#     sh -c 'echo n\pm install x'    ->  npm install x
+#
+# Deleting cannot create a false positive that translating avoids: it only joins
+# words the shell also joins. Six views total, and a pattern found in any is a hit.
+# This MUST stay in step with guard-installs.sh, which builds hay4/hay5/hay6 the
+# same way; the guard-cases fixture runs both implementations over the same
+# payloads so a divergence here fails the build.
+$joined = (($cmd -replace '[\s]+', ' ') -replace '["\x27\\]', '').ToLowerInvariant().Trim()
+$hay4 = ' ' + ($joined -replace '[\s;&|(){}\x60]+', ' ') + ' '
+$hay5 = Squeeze ($hay4 -replace ' -[^ ]*', ' ')
+$hay6 = Squeeze ($hay4 -replace ' -[^ ]* [^ ]*', ' ')
+
 # --- the guard guards itself, on this path too ------------------------------
 # guard-packages.* blocks WRITES to the approval marker, the hook configuration and
 # the hook scripts, and its comment explains why the block has to be there, at the
@@ -118,9 +142,45 @@ $readOnly = @('cat', 'ls', 'grep', 'egrep', 'fgrep', 'diff', 'cmp', 'head', 'tai
 $shellVerbs = @('sh', 'bash', 'dash', 'zsh', 'ksh', 'pwsh', 'powershell')
 $gitReads = @('diff', 'status', 'log', 'show', 'ls-files', 'grep', 'blame', 'cat-file')
 $perimeterHit = ''
-foreach ($rawSeg in ($base -split '[;&|()\x60]')) {
+# Segments from BOTH normalisations, for the same reason the install matcher needs
+# six haystacks: $base maps a quote to a space, so `rm -rf .cl'a'ude` became
+# `rm -rf .cl a ude` and no segment contained the literal `.claude`. $joined deletes
+# the quote instead, which is what the shell does. A hit in either is a hit.
+foreach ($rawSeg in (($base -split '[;&|()\x60]') + ($joined -split '[;&|()\x60]'))) {
     $seg = $rawSeg.Trim()
     if ($seg -eq '') { continue }
+
+    # A GLOB NEVER CONTAINS THE STRING IT MATCHES, so the .Contains() test below is
+    # blind to `rm -rf .cla*` -- which removes the whole perimeter while never
+    # mentioning `.claude`, and is ordinary shell rather than evasion syntax. Look
+    # for a word carrying a glob metacharacter whose non-glob PREFIX is a prefix of
+    # a perimeter path: `.cla*` -> `.cla` is a prefix of `.claude` (hit); `dist/*`
+    # -> `dist/` is not (allowed). A bare `*` has an empty prefix, which is a prefix
+    # of everything, so it is treated as a hit -- `rm -rf *` at the project root
+    # really would take the perimeter, and over-blocking is this guard's documented
+    # direction of failure. Kept in step with the `_glob_hit` block in the .sh twin.
+    if ($seg -match '[*?\[]') {
+        $globWord = $null
+        foreach ($gw in ($seg -split ' ')) {
+            if ($gw -eq '' -or $gw.StartsWith('-')) { continue }
+            if ($gw -notmatch '[*?\[]') { continue }
+            $pre = ($gw -split '[*?\[]')[0]
+            if ($pre.StartsWith('./')) { $pre = $pre.Substring(2) }
+            foreach ($pp in @('.claude', '.git/hooks')) {
+                if ($pp.StartsWith($pre)) { $globWord = $pp; break }
+            }
+            if ($globWord) { break }
+        }
+        if ($globWord) {
+            $gv = ($seg -split ' ')[0]
+            if ($gv.Contains('/')) { $gv = $gv.Substring($gv.LastIndexOf('/') + 1) }
+            if ($readVerbs -notcontains $gv -and $gv -ne 'find') {
+                $perimeterHit = "$globWord (matched by a glob: $seg)"
+                break
+            }
+        }
+    }
+
     # The specific paths first, so the block message can name the one that was
     # touched; bare `.claude` last, as the catch-all. Without it `git clean -fd
     # .claude` named the DIRECTORY and matched none of the three files inside it.
@@ -163,7 +223,21 @@ foreach ($rawSeg in ($base -split '[;&|()\x60]')) {
             # the destination FIRST, so the last word is a source file and this
             # test inspected the wrong argument: `cp -t .claude/hooks/ /tmp/x`
             # overwrote a hook script and returned 0.
-            if ($padded -match ' -([^- ]*t )| --target-directory') { $perimeterHit = $gp; break }
+            # ENUMERATING OPTION SPELLINGS LOSES. The list above was `-t`,
+            # `--target-directory` and `-*t `, and GNU cp also accepts the directory
+            # ATTACHED to the short option, plus any unambiguous long-option
+            # abbreviation. Both of these overwrote a hook:
+            #     cp -t.claude/hooks /tmp/guard-packages.sh
+            #     cp --targ=.claude/hooks/ /tmp/guard-packages.sh
+            # So the test is inverted: ANY option at all means treat the perimeter
+            # path as a destination wherever it sits. The cost is that
+            # `cp -v <perimeter> /tmp/out` is now blocked too, which is the
+            # direction this guard is documented to fail in; `cp <perimeter>
+            # /tmp/out` with no options still reads fine, and that is the form the
+            # block message advertises. Kept in step with the .sh twin.
+            $hasOpt = $false
+            foreach ($cw in ($seg -split ' ')) { if ($cw.StartsWith('-')) { $hasOpt = $true; break } }
+            if ($hasOpt) { $perimeterHit = $gp; break }
             $words = $seg.Split(' ')
             if ($words[$words.Count - 1].Contains($gp)) { $perimeterHit = $gp; break }
             continue
@@ -180,17 +254,18 @@ if ($perimeterHit -ne '') {
 
 $installCommands = @(
 # INSTALL-COMMANDS-BEGIN
-    'npm install', 'npm i', 'npm add', 'npm ci', 'npm update', 'npx', 'npx --package',
+    'npm install', 'npm i', 'npm add', 'npm ci', 'npm update', 'npx', 'npx --package', 'npm exec', 'npm x',
     'yarn add', 'yarn install', 'yarn up', 'yarn upgrade', 'yarn dlx',
     'pnpm add', 'pnpm install', 'pnpm update', 'pnpm dlx',
     'bun add', 'bun install', 'bunx', 'bun x',
     'deno add', 'deno install', 'dotnet add package', 'dotnet package add',
-    'dotnet tool install',
+    'dotnet tool install', 'dotnet restore', 'dotnet tool restore',
     'nuget install', 'paket add', 'pip install', 'pip3 install', 'pip download',
     'pipx install', 'pipx run',
     'uv add', 'uv pip install', 'uv tool install', 'uvx',
     'poetry add', 'pipenv install', 'conda install',
-    'go get', 'go install', 'cargo add', 'cargo install',
+    'go mod tidy', 'go mod download',
+    'go get', 'go install', 'cargo add', 'cargo install', 'cargo fetch',
     'composer require', 'composer install', 'composer update',
     'gem install', 'bundle add', 'bundle install',
     'mvn dependency:get', 'gradle --refresh-dependencies',
@@ -200,7 +275,8 @@ $installCommands = @(
 )
 
 foreach ($p in $installCommands) {
-    if (($hay -like "* $p *") -or ($hay2 -like "* $p *") -or ($hay3 -like "* $p *")) {
+    if (($hay  -like "* $p *") -or ($hay2 -like "* $p *") -or ($hay3 -like "* $p *") -or
+        ($hay4 -like "* $p *") -or ($hay5 -like "* $p *") -or ($hay6 -like "* $p *")) {
         if (Test-Path '.claude/allow-package-changes') { exit 0 }
         [Console]::Error.WriteLine("BLOCKED: this command installs or updates packages ('$p'). Adding or changing dependencies requires approval in the feature's plan.md (or spec.md on Small-tier projects, which have no plan.md). If the approved spec covers it, ask the user to create .claude/allow-package-changes and retry -- do not create it yourself.")
         exit 2
