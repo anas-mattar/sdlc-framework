@@ -934,6 +934,50 @@ elif ! command -v pwsh >/dev/null 2>&1; then
         meh "check-stubs.sh vs .ps1 behaviour (pwsh not installed)"
     fi
 else
+    # 0. THE SAME REFUSAL, on the two trees where a wrong answer is silent.
+    #
+    # This case exists because of a divergence the rest of this section could not
+    # reach. When the .sh ratchet learned to refuse an unreadable tree and a UTF-16
+    # source, only the .sh learned it: check-stubs.ps1 returned 0 for the first and
+    # happily COUNTED the second, because Select-String decodes UTF-16 and a
+    # byte-oriented grep cannot. Same tree, two verdicts -- and neither case is in
+    # this repository's own tree or in either fixture, so parity check 1 below
+    # compared a tree without them and agreed, and the classification fixtures
+    # compare verdicts about PATHS, not about encodings. The bug was reachable only
+    # by trees nobody built.
+    #
+    # Both must REFUSE, and they must refuse together. A count of 0 from either is
+    # the failure: it reads as a clean tree, the ratchet reports "improved", and the
+    # next step writes 0 into the pinned baseline.
+    refusal_case() {  # refusal_case <label> <setup fn>
+        rc_dir="${TMPDIR:-/tmp}/sdlc-refuse.$$"
+        rm -rf "$rc_dir"; mkdir -p "$rc_dir/src"
+        "$2" "$rc_dir" || { meh "$1 (could not build the case)"; rm -rf "$rc_dir"; return 0; }
+        r_sh_out=$(cd "$rc_dir" && sh "$REPO_ROOT/tooling/gate/check-stubs.sh" --count 2>&1); r_sh=$?
+        r_ps_out=$(cd "$rc_dir" && pwsh -NoProfile -File "$REPO_ROOT/tooling/gate/check-stubs.ps1" -Count 2>&1); r_ps=$?
+        sh_ref=0; ps_ref=0
+        [ "$r_sh" != 0 ] && ! printf '%s' "$r_sh_out" | grep -qx '0' && sh_ref=1
+        [ "$r_ps" != 0 ] && ! printf '%s' "$r_ps_out" | grep -qx '0' && ps_ref=1
+        if [ "$sh_ref" = 1 ] && [ "$ps_ref" = 1 ]; then
+            ok "$1 -- both ratchets refuse"
+        else
+            bad "$1 -- sh rc=$r_sh refuse=$sh_ref, ps1 rc=$r_ps refuse=$ps_ref; a count of 0 here reads as a clean tree"
+            printf '          sh : %s\n' "$(printf '%s' "$r_sh_out" | head -1)"
+            printf '          ps1: %s\n' "$(printf '%s' "$r_ps_out" | head -1)"
+        fi
+        rm -rf "$rc_dir"
+    }
+    REPO_ROOT=$(pwd)
+    setup_norepo() { printf '// TODO: invisible\n' > "$1/src/a.ts"; }
+    setup_utf16() {
+        command -v iconv >/dev/null 2>&1 || return 1
+        (cd "$1" && git init -q . 2>/dev/null) || return 1
+        printf '// TODO: a\n// TODO: b\n' | iconv -f UTF-8 -t UTF-16 > "$1/src/w.ts" 2>/dev/null || return 1
+        [ -s "$1/src/w.ts" ] || return 1
+    }
+    refusal_case "an unreadable tree" setup_norepo
+    refusal_case "a UTF-16 source"    setup_utf16
+
     # 1. the same count on this repository's own tree
     cs_sh=$(sh tooling/gate/check-stubs.sh --count 2>/dev/null)
     cs_ps=$(pwsh -NoProfile -File tooling/gate/check-stubs.ps1 -Count 2>/dev/null | tr -d ' \r\n')
@@ -993,6 +1037,64 @@ else
         printf '%s\n' "$ln_ps" > "${TMPDIR:-/tmp}/cs-ln-ps.$$"
         diff "${TMPDIR:-/tmp}/cs-ln-sh.$$" "${TMPDIR:-/tmp}/cs-ln-ps.$$" | sed 's/^/          /'
         rm -f "${TMPDIR:-/tmp}/cs-ln-sh.$$" "${TMPDIR:-/tmp}/cs-ln-ps.$$"
+    fi
+fi
+
+# --- 11b-iii. the two verifiers pin the same lists --------------------------
+# This check exists because of a mistake, and the mistake is the one this whole
+# framework keeps making. verify-guard.sh was changed to pin its guard lists by
+# SHA-256 instead of counting them; verify-guard.ps1 was not, and kept its
+# `$GuardedFloor = 86`. So on Windows -- the platform the shipped settings.json
+# actually targets, because that is where the POSIX form fails open -- the
+# substitution attack the digest exists to stop still certified clean. The fix
+# shipped on the twin nobody could execute.
+#
+# Two assertions, and they are different questions:
+#   1. Both files carry FOUR digest constants, and the same four values. A
+#      divergence here means one platform pins its lists and the other does not.
+#   2. Those values are the digests of the lists as they exist RIGHT NOW. Constants
+#      that agree with each other and not with the file are a pin of nothing --
+#      parity without an absolute truth, which is exactly what G11 was about.
+echo "Guard-list digest pinning"
+vg_sh=tooling/claude/hooks/verify-guard.sh
+vg_ps=tooling/claude/hooks/verify-guard.ps1
+# The .sh spells them GUARDED_DIGEST_SH=<hex>; the .ps1 $GuardedDigestSh = '<hex>'.
+# Compared as a set of four values, so a rename on one side does not read as a
+# mismatch -- what matters is that both pin the same four things.
+dig_sh=$(grep -oE '^(GUARDED|INSTALL)_DIGEST_(SH|PS1)=[0-9a-f]{64}' "$vg_sh" 2>/dev/null \
+         | sed 's/.*=//' | sort)
+dig_ps=$(grep -oE "^\\\$(Guarded|Install)Digest(Sh|Ps1) *= *'[0-9a-f]{64}'" "$vg_ps" 2>/dev/null \
+         | grep -oE "[0-9a-f]{64}" | sort)
+n_sh=$(printf '%s\n' "$dig_sh" | grep -c '[0-9a-f]')
+n_ps=$(printf '%s\n' "$dig_ps" | grep -c '[0-9a-f]')
+if [ "$n_sh" -ne 4 ] || [ "$n_ps" -ne 4 ]; then
+    bad "verify-guard should pin 4 list digests per twin, found sh=$n_sh ps1=$n_ps -- a twin that counts instead of pinning does not detect substitution"
+elif [ "$dig_sh" != "$dig_ps" ]; then
+    bad "verify-guard.sh and .ps1 pin DIFFERENT list digests -- one platform is unprotected:"
+    printf '          sh : %s\n' $dig_sh
+    printf '          ps1: %s\n' $dig_ps
+else
+    # And do they describe the lists that are actually here? Recomputed with the
+    # same normalisation both scripts use: strip CR, drop comments and blank lines,
+    # strip trailing whitespace.
+    dig_bad=""
+    for spec in \
+        "tooling/claude/hooks/guard-packages.sh:GUARDED-MANIFESTS" \
+        "tooling/claude/hooks/guard-installs.sh:INSTALL-COMMANDS" \
+        "tooling/claude/hooks/guard-packages.ps1:GUARDED-MANIFESTS" \
+        "tooling/claude/hooks/guard-installs.ps1:INSTALL-COMMANDS"; do
+        gfile=${spec%:*}; gmark=${spec##*:}
+        [ -f "$gfile" ] || { dig_bad="$dig_bad $gfile(missing)"; continue; }
+        actual=$(sed -n "/$gmark-BEGIN/,/$gmark-END/p" "$gfile" | sed '1d;$d' \
+                 | tr -d '\r' | grep -v '^[[:space:]]*#' | sed 's/[[:space:]]*$//' \
+                 | grep -v '^[[:space:]]*$' | sha256sum | cut -d' ' -f1)
+        printf '%s\n' "$dig_sh" | grep -qx "$actual" || dig_bad="$dig_bad $gfile"
+    done
+    if [ -z "$dig_bad" ]; then
+        ok "both verifiers pin the same 4 list digests, and all 4 match the lists on disk"
+    else
+        bad "a pinned digest does not match the list it claims to pin:$dig_bad"
+        printf '        regenerate with: sh %s --print-digests\n' "$vg_sh"
     fi
 fi
 

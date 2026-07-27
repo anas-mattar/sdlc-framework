@@ -127,16 +127,65 @@ function Get-StubLines {
         [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
         $files = @(git -c core.quotePath=false ls-files --cached --others --exclude-standard 2>$null)
     } finally { [Console]::OutputEncoding = $prevEnc }
+
+    # A FAILED ENUMERATION MUST NOT READ AS A CLEAN TREE. git listing nothing means
+    # either "not a repository" or "a repository with nothing in it", and those are
+    # not the same answer -- but both used to produce a count of 0, which the ratchet
+    # reports as "improved" while inviting you to write 0 into the PINNED baseline.
+    # After that no marker anywhere can ever fail it again. The .sh twin exits 4
+    # here; so does this one, because a verdict the two implementations disagree on
+    # is worse than either verdict alone.
+    if ($files.Count -eq 0) {
+        Write-Host "check-stubs: git listed no files in this directory."
+        Write-Host "  Either this is not a git repository, or the working tree is empty."
+        Write-Host "  Refusing to report 0 markers: a scan that saw nothing and a tree"
+        Write-Host "  with nothing in it are not the same answer."
+        exit 4
+    }
+
     $hits = @()
+    $wide = @()
     foreach ($f in $files) {
         if (-not (Test-IsSource $f)) { continue }
         if (-not (Test-Path -LiteralPath $f -PathType Leaf)) { continue }
+
+        # UTF-16 IS REFUSED, NOT DECODED. Select-String would happily read a BOM'd
+        # UTF-16 file and count its markers -- and the .sh twin cannot, because
+        # `TODO` is stored there as T\0O\0D\0O\0 and a byte-oriented grep can never
+        # match it. So the two implementations returned DIFFERENT counts for the
+        # same tree: sh saw 1 where this saw 7. Refusing on both sides is the only
+        # answer that keeps them in agreement, and it is the honest one -- a marker
+        # a Windows editor has made invisible to the POSIX gate is a marker that
+        # would leave the ratchet the moment CI ran.
+        # Resolve-Path first, and not for tidiness: [System.IO.File] uses the .NET
+        # process working directory, which is NOT PowerShell's current location.
+        # Handed a relative path it looks in whatever directory the process started
+        # in, throws FileNotFound, and the catch below would then treat every source
+        # file as "not UTF-16" -- a check that silently passes on everything.
+        $bom = New-Object byte[] 2
+        try {
+            $fs = [System.IO.File]::OpenRead((Resolve-Path -LiteralPath $f).Path)
+            try { $null = $fs.Read($bom, 0, 2) } finally { $fs.Dispose() }
+            if (($bom[0] -eq 0xFF -and $bom[1] -eq 0xFE) -or
+                ($bom[0] -eq 0xFE -and $bom[1] -eq 0xFF)) { $wide += $f; continue }
+        } catch { }
+
         # -CaseSensitive and -cnotmatch, both deliberately: without them `// todo:`
         # counted here and not in check-stubs.sh, and a line reading
         # `Approved-Stub:` exempted itself here alone.
         $m = Select-String -LiteralPath $f -Pattern $Markers -CaseSensitive -ErrorAction SilentlyContinue |
              Where-Object { $_.Line -cnotmatch $Exempt }
         if ($m) { $hits += $m }
+    }
+
+    if ($wide.Count -gt 0) {
+        Write-Host "check-stubs: these source files are UTF-16 and cannot be scanned for markers:"
+        foreach ($w in $wide) { Write-Host ("  " + $w) }
+        Write-Host "  A UTF-16 file stores TODO as T\0O\0D\0O\0, so every marker in it is"
+        Write-Host "  invisible to the POSIX gate and would silently leave the ratchet."
+        Write-Host "  Convert them to UTF-8 (git can do it: 'working-tree-encoding=UTF-16'"
+        Write-Host "  in .gitattributes keeps the editor happy and the repository readable)."
+        exit 4
     }
     return $hits
 }

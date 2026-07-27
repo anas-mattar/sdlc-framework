@@ -91,6 +91,40 @@ command substitution — so it exited a subshell and the script carried on to re
 a clean tree. Exactly the failure being removed, reintroduced by its own remedy.
 There is now a sentinel file and an `assert_scan_ok` the main shell calls.
 
+**And a second one, worth recording because it is this project's signature
+failure.** All three fixes above landed on the `.sh` side only. For a few hours the
+tree therefore shipped:
+
+| | `.sh` | `.ps1` |
+|---|---|---|
+| W2 substituted list | pinned by digest | `$GuardedFloor = 86` — **still counting** |
+| W4 unreadable tree | exits 4 | returned 0 |
+| W4 UTF-16 source | exits 4 | **counted** it (`Select-String` decodes UTF-16) |
+
+The W2 row was the serious one: `settings.json` ships the PowerShell commands
+*because* that is the platform where the POSIX form fails open, so the fix was
+absent from the platform most likely to run it. The W4 rows were worse in kind —
+not merely unfixed but **disagreeing**, two verdicts for one tree. Both twins now
+pin four digests and refuse both trees, and `verify-guard.ps1` gained
+`-PrintDigests`.
+
+Neither divergence was reachable by the existing parity coverage: it compares
+counts on this repository's own tree (which has no UTF-16 file) and classification
+verdicts about *paths*, not encodings. Two checks close that:
+
+- **11b-0** builds an unreadable tree and a UTF-16 tree and asserts **both**
+  implementations refuse. A count of `0` from either fails it.
+- **11b-iii** asserts both verifiers pin four digests, that the four values are the
+  same on both sides, *and* that they are the digests of the lists on disk right
+  now — constants that agree with each other and not with the file are a pin of
+  nothing.
+
+The digest constants were verified three ways, because no PowerShell runtime was
+available: the POSIX pipeline, an independent reimplementation of the `.ps1`
+normalisation, and the values as committed. All four agree. That is not a
+substitute for executing `verify-guard.ps1` — CI is still the first thing that
+will.
+
 Six new assertions, each verified to fail with its fix reverted: the decoy config,
 the substituted list, the unreadable tree, the UTF-16 source, and — closing a
 vacuity finding of its own — a mutation of `guard-packages`, because every

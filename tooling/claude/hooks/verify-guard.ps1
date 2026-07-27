@@ -23,46 +23,100 @@
 # so a stray em dash becomes three bytes -- one of which is a quote -- and the script
 # dies with "string is missing the terminator". Use `--`, never an em dash.
 
+param(
+    # Recompute and print the four list digests, for pasting into this file and
+    # into verify-guard.sh after a legitimate change to a guard list. Regenerating
+    # has to be one command or it becomes a thing people work around by deleting
+    # the check.
+    [switch]$PrintDigests
+)
+
 $settings = ".claude/settings.json"
-if (-not (Test-Path $settings)) {
-    Write-Host "FAIL: $settings not found -- run this from the project root."; exit 1
-}
-
-if (Test-Path ".claude/allow-package-changes") {
-    Write-Host "INCONCLUSIVE: .claude/allow-package-changes exists, so the guards are"
-    Write-Host "  intentionally open. Delete it and re-run to test that blocking works."
-    exit 1
-}
-
-try { $cfg = Get-Content $settings -Raw | ConvertFrom-Json }
-catch { Write-Host "FAIL: $settings is not valid JSON -- Claude Code will ignore the hooks entirely."; exit 1 }
-
-$entries = @($cfg.hooks.PreToolUse)
-if (-not $entries -or $entries.Count -eq 0) {
-    Write-Host "FAIL: no PreToolUse hook in $settings -- the package guards are not installed."
-    exit 1
-}
-
 $fail = $false
 
-# --- the lists must still be the size they shipped --------------------------
+# --- the lists must still be the lists that shipped -------------------------
 # Behavioural cases can only ever sample. Cutting the install list down to exactly
 # the handful this script exercises left it printing GUARD: verified while
 # `npx cowsay`, `pnpm add react`, `cargo add serde`, `bun install`, `gem install
 # rails` and `composer require` all returned 0 -- an 85% cut, certified. The
 # framework's 99-case fixture would catch that, but it lives in the framework
 # repository, not in an installed project, where THIS script is the only
-# mechanical check there is. Adding patterns is free; removing one means lowering
-# a number here, in the same diff, where a reviewer sees it.
+# mechanical check there is.
+#
+# A COUNT WAS NOT ENOUGH, and the fix for that finding is the finding one layer
+# down. A floor detects DELETION and not SUBSTITUTION. Keeping the twelve commands
+# this script exercises, replacing the other forty-four with `zzjunk00` and leaving
+# the count at 56, produced two PASS lines and GUARD: verified while `npm ci`,
+# `yarn install`, `uv add`, `poetry add`, `bundle add`, `conda install`,
+# `pipx install`, `go install`, `yarn upgrade` and `pnpm dlx` were all open.
+#
+# So the lists are pinned by DIGEST. Changing one means changing a hash here, in
+# the same diff, where a reviewer sees it -- the same argument .gate-sha256 makes
+# about the gate script.
+#
+# FOUR digests, because the configured command may name either twin and the shipped
+# default names the .ps1. These constants MUST match verify-guard.sh exactly: the
+# framework's own suite asserts that they do, because a divergence here means one
+# platform pins its lists and the other does not, which is the failure this whole
+# framework's history is made of.
+#
+# Regenerate after a legitimate list change with:
+#     powershell -NoProfile -File .claude/hooks/verify-guard.ps1 -PrintDigests
+$GuardedDigestSh  = 'c68dc68623405006f36b034cf73dcc70282b0442ec9af1eaed1e5b6f3c0980a7'
+$InstallDigestSh  = '37c9426ef80866a630e7304f8460545140eb3e14fc0108924c1fe42baf37e979'
+$GuardedDigestPs1 = '04617cf3a9f4d77f189fc678f38dab71890c74897cde76a2e7bd608c4a3a5aff'
+$InstallDigestPs1 = '2e5f65bd2e5bc60e89d126d7f2ca08afcdee72bd3ec27bb8d88d4cd0a3843843'
+# Kept as a floor of last resort only. Not the assertion any more.
 $GuardedFloor = 86
 $InstallFloor = 56
+
+# The list body, normalised so a digest survives what legitimately differs between
+# checkouts. This MUST agree byte for byte with list_body() in verify-guard.sh:
+# strip CR (the .ps1 files are checked out CRLF by .gitattributes and the .sh files
+# LF, so the digest of a given list must not depend on which), drop comment lines
+# (prose, re-wrappable without changing behaviour), strip trailing whitespace, drop
+# blank lines. Joined with LF, and hashed with no trailing newline -- which is what
+# `sed ... | sha256sum` produces on the POSIX side for the same input.
+function Get-ListBody([string]$Script, [string]$Begin, [string]$End) {
+    if (-not (Test-Path -LiteralPath $Script)) { return $null }
+    $lines = @(Get-Content -LiteralPath $Script)
+    $in = $false
+    # A plain array, not a generic List. `New-Object System.Collections.Generic.
+    # List[string]` is a documented idiom and also a parse ambiguity -- the
+    # brackets read as an index in some positions -- and this file has to survive
+    # Windows PowerShell 5.1 as well as 7. These bodies are ~60 lines; the cost of
+    # `+=` is irrelevant and the syntax is unmistakable.
+    $keep = @()
+    foreach ($l in $lines) {
+        if ($in -and ($l -match $End)) { break }
+        if ($in) {
+            $t = ($l -replace "`r", '') -replace '[ \t]+$', ''
+            if ($t -notmatch '^\s*#' -and $t -match '\S') { $keep += $t }
+        }
+        if ($l -match $Begin) { $in = $true }
+    }
+    if ($keep.Count -eq 0) { return '' }
+    # A trailing newline, because the POSIX side pipes newline-terminated lines
+    # into sha256sum. Without it the two digests differ for identical content.
+    return (($keep -join "`n") + "`n")
+}
+
+function Get-ListDigest([string]$Script, [string]$Begin, [string]$End) {
+    $body = Get-ListBody $Script $Begin $End
+    if ($null -eq $body) { return $null }
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($body)
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return (($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) -join '')
+    } finally { $sha.Dispose() }
+}
 
 # The two .sh lists are shaped differently and must be counted differently: the
 # manifest patterns are whitespace-separated across lines, the install patterns are
 # one PER LINE because they contain spaces (`dotnet add package`). Counting words
 # in the install list reported 117 for 56 entries, and a floor that a half-emptied
 # list still clears is not a floor. In the .ps1 hooks both are quoted strings, so
-# one rule covers them.
+# one rule covers them. Retained for the entry COUNT shown alongside the digest.
 function Get-ListSize([string]$Script, [string]$Begin, [string]$End, [string]$Mode) {
     if (-not (Test-Path -LiteralPath $Script)) { return 0 }
     $lines = @(Get-Content -LiteralPath $Script)
@@ -84,16 +138,69 @@ function Get-ListSize([string]$Script, [string]$Begin, [string]$End, [string]$Mo
     return $n
 }
 
-function Test-ListSize([string]$Command, [string]$Begin, [string]$End, [int]$Floor, [string]$Label, [string]$Mode) {
+# Regenerating the constants is one command. Placed HERE, below the functions it
+# calls, because PowerShell executes a script top to bottom: a -PrintDigests block
+# above the definitions would fail with "Get-ListDigest is not recognized".
+if ($PrintDigests) {
+    Write-Host "Paste these into verify-guard.ps1, and the _SH/_PS1 pair into verify-guard.sh:"
+    Write-Host ("GuardedDigestSh  = " + (Get-ListDigest '.claude/hooks/guard-packages.sh'  'GUARDED-MANIFESTS-BEGIN' 'GUARDED-MANIFESTS-END'))
+    Write-Host ("InstallDigestSh  = " + (Get-ListDigest '.claude/hooks/guard-installs.sh'  'INSTALL-COMMANDS-BEGIN'  'INSTALL-COMMANDS-END'))
+    Write-Host ("GuardedDigestPs1 = " + (Get-ListDigest '.claude/hooks/guard-packages.ps1' 'GUARDED-MANIFESTS-BEGIN' 'GUARDED-MANIFESTS-END'))
+    Write-Host ("InstallDigestPs1 = " + (Get-ListDigest '.claude/hooks/guard-installs.ps1' 'INSTALL-COMMANDS-BEGIN'  'INSTALL-COMMANDS-END'))
+    exit 0
+}
+
+if (-not (Test-Path $settings)) {
+    Write-Host "FAIL: $settings not found -- run this from the project root."; exit 1
+}
+
+if (Test-Path ".claude/allow-package-changes") {
+    Write-Host "INCONCLUSIVE: .claude/allow-package-changes exists, so the guards are"
+    Write-Host "  intentionally open. Delete it and re-run to test that blocking works."
+    exit 1
+}
+
+try { $cfg = Get-Content $settings -Raw | ConvertFrom-Json }
+catch { Write-Host "FAIL: $settings is not valid JSON -- Claude Code will ignore the hooks entirely."; exit 1 }
+
+$entries = @($cfg.hooks.PreToolUse)
+if (-not $entries -or $entries.Count -eq 0) {
+    Write-Host "FAIL: no PreToolUse hook in $settings -- the package guards are not installed."
+    exit 1
+}
+
+function Test-ListSize([string]$Command, [string]$Begin, [string]$End, [string]$DigestPrefix, [string]$Label, [string]$Mode, [int]$Floor) {
     # The script is the last word of the configured command.
     $script = ($Command -split '\s+')[-1]
     $n = Get-ListSize $script $Begin $End $Mode
-    if ($n -ge $Floor) {
-        Write-Host "  PASS  $Label list has $n entries (floor $Floor)"
+    # Pick the digest belonging to the twin actually configured.
+    $want = if ($script -like '*.ps1') {
+        Get-Variable -Name ($DigestPrefix + 'Ps1') -ValueOnly
     } else {
+        Get-Variable -Name ($DigestPrefix + 'Sh') -ValueOnly
+    }
+    $actual = Get-ListDigest $script $Begin $End
+    if ($actual -eq $want) {
+        Write-Host "  PASS  $Label list matches the digest it shipped with ($n entries)"
+    } elseif ($n -lt $Floor) {
+        # A digest mismatch AND a short list. Report the shorter diagnosis: a list
+        # that has been cut down is a different mistake from one that has been
+        # edited, and "you removed patterns" is more actionable than two hashes.
+        # .NET always has SHA256, so unlike the POSIX twin there is no no-digest
+        # fallback here -- the floor exists only to sharpen this message.
         Write-Host "  FAIL  $Label list has $n entries, expected at least $Floor -- $script has"
         Write-Host "        been cut down. Patterns removed from the list are silently"
         Write-Host "        unguarded; the behavioural cases below only sample it."
+        $script:fail = $true
+    } else {
+        Write-Host "  FAIL  $Label list does not match the digest it shipped with."
+        Write-Host "        expected $want"
+        Write-Host "        actual   $actual   ($n entries)"
+        Write-Host "        $script has been edited. A count would not have caught this:"
+        Write-Host "        entries can be REPLACED without changing how many there are,"
+        Write-Host "        and the behavioural cases below only sample the list."
+        Write-Host "        If the change is intended, regenerate with:"
+        Write-Host "            powershell -NoProfile -File .claude/hooks/verify-guard.ps1 -PrintDigests"
         $script:fail = $true
     }
 }
@@ -149,7 +256,7 @@ if (-not $fileCmd) {
     $fail = $true
 } else {
     Write-Host "file guard: $fileCmd"
-    Test-ListSize $fileCmd 'GUARDED-MANIFESTS-BEGIN' 'GUARDED-MANIFESTS-END' $GuardedFloor 'manifest' 'words'
+    Test-ListSize $fileCmd 'GUARDED-MANIFESTS-BEGIN' 'GUARDED-MANIFESTS-END' 'GuardedDigest' 'manifest' 'words' $GuardedFloor
 
     # Pre-flight: if the hook cannot run at all, say so once rather than per case.
     if ($null -eq (Invoke-Hook $fileCmd (FilePayload "src/app.ts"))) {
@@ -215,7 +322,7 @@ if (-not $instCmd) {
     $fail = $true
 } else {
     Write-Host "install guard: $instCmd"
-    Test-ListSize $instCmd 'INSTALL-COMMANDS-BEGIN' 'INSTALL-COMMANDS-END' $InstallFloor 'install-command' 'lines'
+    Test-ListSize $instCmd 'INSTALL-COMMANDS-BEGIN' 'INSTALL-COMMANDS-END' 'InstallDigest' 'install-command' 'lines' $InstallFloor
     Write-Host "install commands must be BLOCKED (exit 2):"
     Test-Case $instCmd "npm install"        (CmdPayload "npm install left-pad")       2
     Test-Case $instCmd "yarn add"           (CmdPayload "yarn add zod")               2
