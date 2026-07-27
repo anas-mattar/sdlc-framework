@@ -47,10 +47,9 @@ if ($filePath -isnot [string]) {
     exit 2
 }
 
-# Split-Path handles backslashes but not forward slashes in every PowerShell
-# version, and Claude Code reports both. Take the last segment either way.
-$name = ($filePath -split '[\\/]')[-1]
-if (-not $name) { exit 0 }
+# An early emptiness check only. The BASENAME used for matching is derived from
+# $norm further down, not from here -- see the note there.
+if (-not ($filePath -split '[\\/]')[-1]) { exit 0 }
 
 # --- the guard guards itself ------------------------------------------------
 # Everything this control depends on lives inside the perimeter the agent
@@ -78,6 +77,19 @@ if (-not $name) { exit 0 }
 # normalises to `/package.json` -- only ever used for matching, never to open a
 # file, and `*/package.json` matches it. Kept in step with guard-packages.sh.
 $norm = ((($filePath -replace '\\', '/') -replace '[ .]*/', '/') -replace '[ .]*$', '') -replace '/+', '/'
+
+# THE BASENAME COMES FROM $norm, NOT FROM $filePath. It used to be
+# `($filePath -split '[\\/]')[-1]`, computed before any normalisation -- so when
+# the trailing space/dot stripping was added to $norm above, the manifest match
+# kept using the raw name and `package.json ` stayed unguarded on this twin while
+# the .sh blocked it. The guard-cases fixture caught it as `sh=2 ps1=0` on three
+# rows; nothing else would have, because the SELF-GUARD above matches $norm and
+# was therefore already correct, so the two halves of one file disagreed.
+#
+# Split-Path handles backslashes but not forward slashes in every PowerShell
+# version, and Claude Code reports both. Take the last segment either way. The
+# .sh twin does the same thing as `lname=${lnorm##*/}`.
+$name = ($norm -split '/')[-1]
 foreach ($self in @('*.claude/allow-package-changes', '*.claude/settings*.json', '*.claude/hooks/*')) {
     if ($norm -like $self) {
         [Console]::Error.WriteLine("BLOCKED: '$filePath' is part of the package guard itself (its approval marker, its configuration, or its hook script). Only a human creates or edits these. If package changes are genuinely approved in the feature's plan.md (or spec.md at Small tier), ask the user to create the marker -- do not create it yourself.")
