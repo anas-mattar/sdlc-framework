@@ -14,10 +14,15 @@ requires the existing code to change on day one.
 
 ### 1. Install without touching code
 
-Follow `SETUP.md` steps 1–7 (answer the six questions, copy the layers, install
-tooling, generate CLAUDE.md). Everything lands in `docs/`, `.claude/`, `specs/`,
-and the gate scripts — zero code risk. One commit:
+Follow `SETUP.md` steps 1–8 (answer the six questions, copy the layers, install
+tooling, generate CLAUDE.md, verify). Everything lands in `docs/`, `.claude/`,
+`specs/`, and the gate scripts — zero code risk. One commit:
 `chore: adopt <framework> vX.Y.Z`.
+
+Do not skip step 8. Run `/framework-doctor`, and in particular confirm the guard
+self-test reports `GUARD: verified`. On an existing project this is the install
+step most likely to fail silently — the hook lands but never runs, and nobody
+finds out until an unreviewed dependency reaches a pull request.
 
 ### 2. Baseline gate first — before any feature work
 
@@ -27,6 +32,9 @@ Fill in the gate scripts and get the **existing** build and tests to `EXIT: 0`.
   **feature 001** — specced, phased, and gated like any other work.
 - A green baseline is the regression contract every future phase is measured
   against. This step alone justifies the adoption.
+- The baseline run leaves a receipt (`.gate-result.json`) proving the gate was
+  green against that exact tree. Gitignore it, and expect it to go **stale** the
+  moment feature work begins — that is the mechanism working, not a fault.
 
 ### 3. Layer-3 archaeology — the biggest immediate win
 

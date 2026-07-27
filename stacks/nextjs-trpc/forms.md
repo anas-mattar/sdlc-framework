@@ -129,7 +129,7 @@ In both variants the form itself shows Sonner toasts and disables submit via
 
 ## Rule F8b -- Zod schemas
 
-Live in `src/schema/<domain>.ts` (see `docs/stack-frontend/rules.md`). Never define Zod schemas inline in form files.
+Live in `src/schema/<domain>.ts` (see `docs/stacks/<frontend>/rules.md`). Never define Zod schemas inline in form files.
 
 ```ts
 import { z } from 'zod';

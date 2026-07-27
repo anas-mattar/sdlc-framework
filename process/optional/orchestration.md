@@ -22,8 +22,10 @@ never dissolve the boundary.
    orchestrator that starts phase N+1 while phase N is ungated has deleted the
    framework's central control.
 2. **Human gates are not delegable.** Agents may run builds and checks at will,
-   but only the user's reported `EXIT: 0` and approval satisfy the Definition of
-   Done. An agent confirming another agent's work is AI review — never human
+   but only a valid receipt from the **user's** gate run plus human approval
+   satisfy the Definition of Done. An agent may run `--verify` (it reads
+   evidence, it does not produce it); an agent running the gate itself proves
+   nothing. An agent confirming another agent's work is AI review — never human
    review.
 3. **One writer, many readers.** Any number of agents may read (research,
    explore, verify) concurrently; exactly **one** agent writes to a given repo

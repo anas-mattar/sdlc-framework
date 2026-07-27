@@ -30,9 +30,9 @@ Frontend route protection improves UX, but backend must still enforce authorizat
 
 Hide or disable actions the user cannot perform — any privileged domain action.
 
-> Example (from the WMS project): receive purchase order, finalize discrepancy,
-> approve put-away, cancel shipment, export report, manage permissions, manage
-> integrations.
+> Examples: approve or finalize a transaction, cancel an order, export a report,
+> manage permissions, manage integrations — any action with a business
+> consequence. List this project's cases in `docs/project/domain-rules.md`.
 
 Do not rely on UI permissions only. Backend must enforce the same rule.
 

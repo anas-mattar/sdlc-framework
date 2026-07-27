@@ -4,7 +4,7 @@
 > performance, indexing, transactions, N+1 prevention, data types, soft delete/audit,
 > concurrency, seeding, multi-context. Rule ids are stable — reviews cite them; never
 > renumber. These complement (and never override) the mandatory stack defaults in
-> `docs/stack-backend/database-rules.md`, which also covers migrations (DB1–DB4).
+> `docs/stacks/<backend>/database-rules.md`, which also covers migrations (DB1–DB4).
 
 ---
 

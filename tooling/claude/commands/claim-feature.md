@@ -7,6 +7,12 @@ is the mandatory first step of starting any feature on a multi-developer project
 Do NOT create any branch, folder, or spec content before the claim has landed on
 main.
 
+This command implements the **claim-commit** allocation scheme. If the project
+allocates feature numbers from **tracker issue IDs** instead (the default for
+projects that have a tracker — team-workflow §2a), stop and say so: the claim is
+made by creating and self-assigning the issue, and this command does not apply.
+Check which scheme is in force before step 1.
+
 ## Steps
 
 1. **Preflight** — in the specs repo (the repo containing CLAUDE.md; for

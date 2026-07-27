@@ -10,7 +10,7 @@ the phase's review notes; any FAIL blocks the phase.
 
 ## Structure
 
-- [ ] New files follow the Project Shape in `docs/stack-frontend/rules.md`
+- [ ] New files follow the Project Shape in `docs/stacks/<frontend>/rules.md`
       (`src/` layout; schemas in `src/schema/<domain>.ts`; tRPC client `api` from
       `@/trpc/react`).
 - [ ] Component files are kebab-case; exported components PascalCase; props
@@ -25,10 +25,10 @@ the phase's review notes; any FAIL blocks the phase.
 - [ ] Client data access uses `api.<router>.<procedure>` hooks; mutations
       invalidate/refetch affected queries via `api.useUtils()`.
 - [ ] tRPC procedures validate input with Zod and call the injected backend
-      fetch helper(s) on `ctx` (WMS example: `ctx.featcher` / `ctx.pomsFeatcher`);
+      fetch helper(s) on `ctx` (one per backend service, e.g. `ctx.<service>Fetcher`);
       anything requiring a session uses `protectedProcedure`.
 
-## Forms (`docs/stack-frontend/forms.md`)
+## Forms (`docs/stacks/<frontend>/forms.md`)
 
 - [ ] Every data-entry form uses React Hook Form + `zodResolver` — no `useState`
       field state, no manual validation guards.
@@ -39,7 +39,7 @@ the phase's review notes; any FAIL blocks the phase.
 - [ ] Dual create/update via `data` prop where the entity supports both.
 - [ ] Forms live in `components/forms/`; schemas in `src/schema/<domain>.ts`.
 
-## Tables (`docs/stack-frontend/tables.md`)
+## Tables (`docs/stacks/<frontend>/tables.md`)
 
 - [ ] No hand-rolled `<table>` for data lists. Server-paged lists compose
       `QueryDataTable`; matrix grids may compose `BaseDataTable` directly.
@@ -54,7 +54,8 @@ the phase's review notes; any FAIL blocks the phase.
       (Redux holds only session-scoped state: the project's global scope
       selections and permissions).
 - [ ] Permission gating uses the project's permission hooks/components as UX
-      hints; writes rely on backend enforcement (WMS example: `useHasPermission`/`RequirePermission`).
+      hints; writes rely on backend enforcement (e.g. a `useHasPermission` hook and
+      a `RequirePermission` wrapper component).
 - [ ] Tailwind utilities + `cn()`; theme CSS variables from `styles/globals.css`;
       no hardcoded hex colors; layout matches screenshots when they exist.
 
@@ -65,12 +66,15 @@ the phase's review notes; any FAIL blocks the phase.
 - [ ] No new `dangerouslySetInnerHTML` with dynamic content.
 - [ ] Lists are paginated or justified-bounded; loading/empty/error states exist;
       search inputs debounced.
-- [ ] No new packages beyond those approved in the feature's `plan.md`.
+- [ ] No new packages beyond those approved in the feature's `plan.md` (or
+      `spec.md` at Small tier, which ships no `plan.md`).
 
 ## Process
 
 - [ ] Only the approved phase's files changed (`git diff --stat` reviewed).
-- [ ] Gate run by the user with confirmed exit code 0.
+- [ ] The gate receipt reports `RECEIPT: valid` for the current tree. A pasted
+      exit code does not satisfy this, and neither does a stale, `min`, or missing
+      receipt — see `docs/process/definition-of-done.md` item 3.
 
 ## Project-Specific Rules (define per project in docs/project/)
 

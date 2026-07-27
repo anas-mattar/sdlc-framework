@@ -5,8 +5,8 @@
 > samples (`Order`, `Shipment`, …) are illustrative; angle-bracket placeholders
 > (`<YourDbContext>`, `<ExternalSystem>`) are filled by each project's conventions in
 > `docs/project/` (see appendix), which take precedence where they refine a rule.
-> Database rules: `docs/stack-backend/database-rules.md` and
-> `docs/stack-backend/database-best-practices.md`.
+> Database rules: `docs/stacks/<backend>/database-rules.md` and
+> `docs/stacks/<backend>/database-best-practices.md`.
 
 ---
 

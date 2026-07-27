@@ -3,7 +3,7 @@
 Core architecture rules for a Next.js App Router + tRPC + NextAuth + Redux Toolkit + Tailwind/shadcn frontend.
 
 > **MANDATORY**: every frontend phase must pass
-> `docs/stack-frontend/compliance-checklist.md` before it is marked complete.
+> `docs/stacks/<frontend>/compliance-checklist.md` before it is marked complete.
 > The checklist is part of Definition of Done item 5 (AI review).
 
 ## Stack
@@ -55,7 +55,8 @@ Notes:
   `@/trpc/server`.
 - Path alias `@/*` → `src/*`.
 - Keep existing directory names consistent even when misspelled — no parallel
-  corrected dirs (WMS example: the existing `components/purshase-order/` stays).
+  corrected dirs. A directory misspelled at creation keeps that spelling; record
+  it in `docs/project/gotchas.md` so nobody "fixes" it later.
 
 ## App Router Rules
 
@@ -91,13 +92,14 @@ Rules:
 - UI must not call backend URLs directly.
 - Use `api.<router>.<procedure>` from `@/trpc/react` on the client.
 - Use the server caller from `@/trpc/server` where the project pattern supports it.
-- tRPC procedures call the injected backend fetch helper(s) on `ctx` (WMS
-  example: `ctx.featcher` / `ctx.pomsFeatcher` wrapping `src/utils/wmsFeatcher.ts`).
+- tRPC procedures call the injected backend fetch helper(s) on `ctx` — one per
+  backend service (e.g. `ctx.<service>Fetcher`), each wrapping a single shared
+  fetch utility. Record this project's helper names in `docs/project/`.
 - Business entities live in the backend API unless the project plan says otherwise.
 
 ## Forms
 
-Forms must follow `docs/stack-frontend/forms.md`.
+Forms must follow `docs/stacks/<frontend>/forms.md`.
 
 Key rules:
 - React Hook Form.
@@ -111,7 +113,7 @@ Key rules:
 
 ## Tables
 
-Tables must follow `docs/stack-frontend/tables.md`.
+Tables must follow `docs/stacks/<frontend>/tables.md`.
 
 Key rules:
 - Use `QueryDataTable` for server-paged lists; `BaseDataTable` alone is allowed

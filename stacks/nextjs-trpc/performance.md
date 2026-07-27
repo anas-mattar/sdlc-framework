@@ -39,7 +39,7 @@ All large tables must use server-side pagination.
 
 Tables must follow:
 
-- `docs/stack-frontend/tables.md`
+- `docs/stacks/<frontend>/tables.md`
 
 Required:
 
@@ -59,7 +59,7 @@ Forms must avoid unnecessary re-renders.
 
 Use React Hook Form patterns from:
 
-- `docs/stack-frontend/forms.md`
+- `docs/stacks/<frontend>/forms.md`
 
 Rules:
 

@@ -6,6 +6,27 @@
      detail lives in docs/. -->
 
 Framework: sdlc-framework v{{FRAMEWORK_VERSION}}
+Scope tier: {{SCOPE_TIER}} <!-- Small | Medium | Large — set at setup (SETUP.md Q6).
+     Small: spec.md only, gate per feature, AI review + developer acceptance.
+     Medium/Large: spec.md + plan.md + tasks.md, gate per phase, both reviews. -->
+Developers: {{TEAM_SIZE}} <!-- solo | team — decides whether human review means the
+     developer's own acceptance review or independent peer review (DoD item 6). -->
+Hosting platform: {{FORGE}} <!-- github | gitlab | azure-devops | bitbucket
+     (SETUP.md Q7). Decides which CI wrapper this project installed and how the
+     enforcement perimeter is owned. See docs/process/review-process.md for what
+     "change request", "protected-branch rules" and "code ownership" mean here. -->
+Review evidence: {{REVIEW_EVIDENCE_CMD}} <!-- The command that proves a human
+     APPROVED the change request. Definition of Done item 6 accepts this and does
+     not accept a ticked box in a markdown file — the agent wrote the file, so it
+     can write the tick. Copy the form for this platform from tooling/ci/README.md.
+     If no CLI is available, the everywhere-fallback is:
+       git log -1 --format='%(trailers:key=Reviewed-by,valueonly)' <phase commit> -->
+Perimeter ownership: {{PERIMETER_OWNERSHIP}} <!-- How gate.sh, check-stubs.sh,
+     tooling/ci/, .claude/hooks/ and docs/exceptions.md are protected from being
+     edited in the same change request as the work they would excuse. On GitHub and
+     GitLab Premium: "CODEOWNERS". On Azure DevOps, Bitbucket, or GitLab Free there
+     is no path-scoped ownership — name the substitute you chose, or write
+     "UNOWNED" so the gap is documented rather than assumed away. -->
 
 Guidance for Claude Code working in this repository.
 
@@ -44,18 +65,29 @@ front:
 |---|---|
 | Starting any feature | `docs/process/project-rules.md`, `docs/roadmap/` (delivery source of truth) |
 | Writing or updating a `spec.md` | `docs/business/` (behavior source of truth), `docs/process/source-artifacts.md` |
-| Building or changing UI | `specs/<feature>/screenshots/`, `docs/prototypes/` (layout source of truth) |
+| Building or changing UI | `specs/feature/NNN-<name>/screenshots/`, `docs/prototypes/` (layout source of truth) |
 | Finishing any phase | `docs/process/definition-of-done.md` |
-| A migration or new entity | `docs/stack-backend/database-rules.md` |
-| Backend controllers/services/repos | `docs/stack-backend/architecture-rules.md` |
-| Any data-entry form | `docs/stack-frontend/forms.md` |
-| Any data table/list | `docs/stack-frontend/tables.md` |
-| New API procedure / data fetching | `docs/stack-frontend/trpc.md` |
-| Auth, permissions, sensitive data | `docs/stack-frontend/security.md` |
+<!-- STACK ROWS — write these at setup from the files your own docs/stacks/<name>/
+     folders actually contain, one row per document. Do not keep rows for a stack
+     this project did not install: a row pointing at a file that is not there is an
+     instruction to read nothing, and it is indistinguishable from a rule that has
+     been quietly dropped.
+
+     These rows used to ship pre-filled with two specific stacks' filenames --
+     including one named after a particular RPC library -- inside a template that
+     claims to be stack-neutral. Examples of the shape, not rows to keep:
+
+       | A migration or new entity          | `docs/stacks/<name>/database-rules.md` |
+       | Controllers / services / repos     | `docs/stacks/<name>/rules.md`          |
+       | Any data-entry form                | `docs/stacks/<name>/forms.md`          |
+       | Auth, permissions, sensitive data  | `docs/stacks/<name>/security.md`       |
+-->
 | A new external call or webhook | `docs/contracts/` (contract doc first, code second) |
 | Anything product-specific | `docs/project/` (domain rules + gotchas) |
 | Claiming/starting a feature on a team | `docs/process/team-workflow.md` |
 | Running multiple AI agents/sessions | `docs/process/orchestration.md` |
+| Framework seems not to be enforcing | run `/framework-doctor` |
+| Moving to a newer framework version | run `/framework-upgrade <path-to-framework>` |
 
 ## Workflow (non-negotiable)
 
@@ -66,8 +98,11 @@ front:
 4. One feature branch per feature. <!-- multi-repo: one branch per affected repo -->
 5. Create/update `spec.md` → `plan.md` → `tasks.md` and get approval.
 6. Implement **one phase only**, then stop and ask the user to run the gate.
-7. The gate is `./gate.ps1` (or `./gate.sh`) at the repo root — it prints
-   `EXIT: <code>`. **Do not claim success until the user reports `EXIT: 0`.**
+7. The gate is `./gate.ps1` (or `./gate.sh`) at the repo root. The **user** runs
+   it; it prints `EXIT: <code>` and writes a receipt. **Do not claim success
+   until `./gate.ps1 -Verify` (or `./gate.sh --verify`) reports
+   `RECEIPT: valid`** — a pasted exit code does not count, and a receipt from
+   before your latest edit reports `RECEIPT: stale`.
 8. User checks `git diff --stat`; fix only current-phase issues; commit the phase.
 9. AI review (`/phase-review`), then human review, then merge. Never merge on AI
    review alone.
@@ -82,15 +117,30 @@ front:
 
 ## Source of Truth Priority
 
-1. `specs/<feature>/screenshots/`  <!-- per feature; absent when the feature has no design -->
-2. `specs/<feature>/spec.md`
-3. `specs/<feature>/plan.md`
-4. `specs/<feature>/contracts/`
-5. `specs/<feature>/data-model.md`
-6. `specs/<feature>/tasks.md`
+**Canonical: `docs/process/source-artifacts.md` → *The Full Ranking*.** It covers
+spec artifacts and rule documents in one order; delete the rows below that this
+project does not have, and do not re-rank them here.
 
-On any conflict between artifacts: **stop and report** — never silently choose.
-Never invent a UI layout when screenshots exist.
+1. `docs/business/`  <!-- behaviour; delete if the project has no source guides -->
+2. `docs/roadmap/` definitions  <!-- scope/sequencing; delete at Small tier -->
+3. `specs/feature/NNN-<name>/screenshots/`  <!-- layout only; absent when the feature has no design -->
+4. `specs/feature/NNN-<name>/spec.md`
+5. `specs/feature/NNN-<name>/decisions.md`  <!-- conflicts already resolved -->
+6. `specs/feature/NNN-<name>/plan.md`
+7. `specs/feature/NNN-<name>/contracts/`
+8. `specs/feature/NNN-<name>/data-model.md`
+9. `specs/feature/NNN-<name>/tasks.md`
+10. `docs/project/`  <!-- domain rules and gotchas — outranks stack rules -->
+11. `docs/stacks/<name>/`  <!-- one row per installed stack -->
+
+On any conflict between artifacts: **stop and report** — never silently choose, and
+record the resolution in `specs/feature/NNN-<name>/decisions.md`. Never invent a UI
+layout when screenshots exist.
+
+Phase progress goes in `specs/feature/NNN-<name>/status.md` and feature status in
+`docs/roadmap/status.md` — never as edits to `tasks.md` or the roadmap
+definitions, which are fingerprinted by the gate receipt. Wanting to change
+`tasks.md` after implementation means the requirements moved: stop and report.
 
 Source artifacts each own one dimension of authority — roadmap = scope/status,
 `docs/business/` guides = behavior, prototype/screenshots = layout. Specs are
@@ -105,7 +155,7 @@ Usual design source for this project: {{DESIGN_SOURCE}} <!-- HTML prototype at
 Per feature, whatever the source, the contract is the same
 (`docs/process/source-artifacts.md`):
 
-- If `specs/<feature>/screenshots/` exists (captured/exported from the design
+- If `specs/feature/NNN-<name>/screenshots/` exists (captured/exported from the design
   source, sequence-numbered `01-…`, provenance in `notes.md`), it is the **#1
   layout authority** — the implemented UI must follow it exactly.
 - AI-generated designs become authority only **after human approval** promotes

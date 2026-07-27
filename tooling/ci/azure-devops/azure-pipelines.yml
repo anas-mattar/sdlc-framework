@@ -1,0 +1,79 @@
+# CI gate — Azure Pipelines wrapper.
+#
+# Copy to <repo>/azure-pipelines.yml, then uncomment the toolchain block for your
+# stack. Keep exactly ONE toolchain active per repo. BOTH ship commented out: a
+# file that arrives with one already active makes "uncomment yours" produce two,
+# and CI then runs `yarn install` on a repo with no package.json.
+#
+# This file is a WRAPPER. Every check it performs lives in tooling/ci/gate-ci.sh,
+# installed alongside it, so the four supported platforms cannot drift apart. Do
+# not inline a check here — add it to the script and to every wrapper, which is
+# what tests/framework-checks.sh asserts.
+#
+# Required on solo projects too, and least optional there. The reason is in
+# docs/process/gate-command.md -- see the section on running the same gate when
+# there is nobody else to review the work.
+#
+# AZURE DEVOPS NEEDS ONE EXTRA STEP THAT THE OTHER PLATFORMS DO NOT. A pipeline
+# here is not required by default and `trigger:`/`pr:` in this file do NOT make it
+# required for a pull request. You must add a **Build Validation** branch policy:
+#   Repos → Branches → main → Branch policies → Build Validation → + →
+#   this pipeline, Trigger: Automatic, Policy requirement: REQUIRED.
+# Without that policy this file runs and reports, and nothing stops a merge. See
+# tooling/ci/azure-devops/branch-policy.md.
+
+trigger:
+  branches:
+    include: [main]
+
+pr:
+  branches:
+    include: [main]
+
+pool:
+  vmImage: ubuntu-latest
+
+steps:
+  # fetchDepth: 0 — the default shallow checkout has no history, so
+  # `git log -- docs/exceptions.md` returns nothing and both the "was this file
+  # deleted" and "were its rows emptied" tests silently pass forever. If full
+  # history is too expensive on this repo, say so in the pull request and delete
+  # those tests rather than shipping checks that cannot fail.
+  - checkout: self
+    fetchDepth: 0
+
+  - script: sh tooling/ci/gate-ci.sh pin
+    displayName: Pin the gate
+
+  - script: sh tooling/ci/gate-ci.sh override-not-committed
+    displayName: The package-guard override must not be committed
+
+  # --- toolchain: uncomment exactly ONE of these ---------------------------
+  # Node / Next.js:
+  # - task: NodeTool@0
+  #   inputs:
+  #     versionSpec: '20.x'
+  # - script: corepack enable && yarn install --immutable
+  #   displayName: Install dependencies
+
+  # .NET:
+  # - task: UseDotNet@2
+  #   inputs:
+  #     version: '8.0.x'
+  # - script: dotnet restore
+  #   displayName: Restore
+  # -----------------------------------------------------------------------
+
+  - script: sh tooling/ci/gate-ci.sh stub-ratchet
+    displayName: Stub ratchet
+
+  - script: sh tooling/ci/gate-ci.sh exceptions
+    displayName: No overdue exceptions
+
+  - script: sh tooling/ci/gate-ci.sh verify-guards
+    displayName: The package guards actually block
+
+  # Do not add `continueOnError: true` — that turns the gate into a notification,
+  # and the framework's whole premise is that it is a gate.
+  - script: sh tooling/ci/gate-ci.sh run-gate
+    displayName: Run the gate

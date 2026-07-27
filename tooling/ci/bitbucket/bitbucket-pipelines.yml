@@ -1,0 +1,69 @@
+# CI gate — Bitbucket Pipelines wrapper.
+#
+# Copy to <repo>/bitbucket-pipelines.yml, then uncomment the toolchain block for
+# your stack. Keep exactly ONE toolchain active per repo. BOTH ship commented out:
+# a file that arrives with one already active makes "uncomment yours" produce two,
+# and CI then runs `yarn install` on a repo with no package.json.
+#
+# This file is a WRAPPER. Every check it performs lives in tooling/ci/gate-ci.sh,
+# installed alongside it, so the four supported platforms cannot drift apart. Do
+# not inline a check here — add it to the script and to every wrapper, which is
+# what tests/framework-checks.sh asserts.
+#
+# Required on solo projects too, and least optional there. The reason is in
+# docs/process/gate-command.md -- see the section on running the same gate when
+# there is nobody else to review the work.
+#
+# BITBUCKET NEEDS ONE EXTRA STEP THAT THE OTHER PLATFORMS DO NOT. Defining a
+# pull-request pipeline here does not make it mandatory. Add a merge check:
+#   Repository settings → Branch restrictions → main →
+#   "Minimum number of successful builds for the last commit" = 1
+# Without it this file runs and reports, and nothing stops a merge. See
+# tooling/ci/bitbucket/default-reviewers.md.
+
+# depth: full — a shallow clone has no history, so `git log -- docs/exceptions.md`
+# returns nothing and both the "was this file deleted" and "were its rows emptied"
+# tests silently pass forever. If a full clone is too expensive on this repo, say
+# so in the pull request and delete those tests rather than shipping checks that
+# cannot fail.
+clone:
+  depth: full
+
+image: alpine:3.20
+
+definitions:
+  steps:
+    - step: &gate
+        name: gate
+        script:
+          # git and coreutils are not in the base alpine image; sha256sum, awk and
+          # sh are the whole of what gate-ci.sh needs beyond git.
+          - apk add --no-cache git bash coreutils >/dev/null
+          - sh tooling/ci/gate-ci.sh pin
+          - sh tooling/ci/gate-ci.sh override-not-committed
+
+          # --- toolchain: uncomment exactly ONE of these -------------------
+          # Node / Next.js:
+          # - apk add --no-cache nodejs npm >/dev/null
+          # - corepack enable && yarn install --immutable
+
+          # .NET:
+          # - apk add --no-cache dotnet8-sdk >/dev/null
+          # - dotnet restore
+          # -----------------------------------------------------------------
+
+          - sh tooling/ci/gate-ci.sh stub-ratchet
+          - sh tooling/ci/gate-ci.sh exceptions
+          - sh tooling/ci/gate-ci.sh verify-guards
+          # Bitbucket has no per-step "allow failure" to switch on by accident,
+          # but do not wrap this in `|| true` — that turns the gate into a
+          # notification, and the framework's whole premise is that it is a gate.
+          - sh tooling/ci/gate-ci.sh run-gate
+
+pipelines:
+  pull-requests:
+    '**':
+      - step: *gate
+  branches:
+    main:
+      - step: *gate
