@@ -134,13 +134,23 @@ END {
         if (index(pend, "\\")) { pend = unesc(pend); if (bad) exit 4 }
       } else pend = ""
       pdepth = depth
-      if (ti > 0 && depth == ti && (pend == key || (key2 != "" && pend == key2))) {
-        r = nx; sub(/^[ \t\r\n]*:[ \t\r\n]*/, "", r)
-        if (r == "") hit = 1
-      }
+      # `hit` means the payload NAMES this key inside tool_input. Whether a
+      # readable string comes back is decided below; if none does, the END block
+      # exits 4 and the hook BLOCKS. It used to require the value to begin with a
+      # quote (`r == ""`), so a NON-STRING value fell through to exit 3 -- "not a
+      # call this hook judges" -- and `{"command":["npm","install","x"]}` was
+      # ALLOWED here while the .ps1 twin blocked it. A value this parser cannot
+      # read is a value it cannot judge, whatever its type.
+      if (ti > 0 && depth == ti && (pend == key || (key2 != "" && pend == key2))) hit = 1
     } else {
+      # No `got == 0` guard: the LAST occurrence of a duplicated key wins, which
+      # is what ConvertFrom-Json does on the .ps1 side. First-wins here and
+      # last-wins there meant a payload with two `command` keys was judged on a
+      # different string per platform, so each implementation failed open in one
+      # direction: `{"command":"npm install evil","command":"ls"}` was read as the
+      # install by one and as `ls` by the other.
       if (ti > 0 && depth == ti && pdepth == depth && \
-          ((pend == key && got == 0) || (key2 != "" && pend == key2 && got2 == 0))) {
+          (pend == key || (key2 != "" && pend == key2))) {
         v = seg[st]
         for (x = st + 1; x <= k; x++) v = v "\"" seg[x]
         if (length(v) > 65536) exit 4
@@ -187,14 +197,19 @@ esac
 # guard one layer below the parser that had just been fixed. `>` and `<` are
 # deliberately left alone -- the perimeter block below reads them.
 #
-# ONE normalisation, two views of it. This hook runs on every Bash call and each
-# avoided process is paid back thousands of times -- on Windows/MSYS a fork costs
-# more than everything this script does with the result.
+# ONE normalisation, several views of it. This hook runs on every Bash call and
+# each avoided process is paid back thousands of times -- on Windows/MSYS a fork
+# costs more than everything this script does with the result.
 #
 #   base   case-folded, quotes gone, backslashes folded to `/`, whitespace
 #          squeezed. Shell separators (`;&|()` and the backtick) and redirections
 #          (`>` `<`) are still there.
 #   hay    base with the separators collapsed to spaces, for the install match.
+#   hay2   hay with OPTION words, DIRECTORY prefixes and Windows executable
+#          suffixes removed, so a tool and its subcommand separated by a flag
+#          end up adjacent.
+#   hay3   the same, except each option word takes the word AFTER it with it --
+#          which is what an option with an ARGUMENT looks like.
 #   psegs  base split INTO simple commands at those separators, for the
 #          perimeter block, which has to judge each one on its own.
 #
@@ -204,8 +219,24 @@ esac
 #
 # (`\047` is the single quote and `\140` the backtick, spelled in octal so these
 # lines do not have to be quoted three different ways to say them.)
+#
+# WHY THREE HAYSTACKS. The patterns are word SEQUENCES and real invocations put
+# things between the words. `npm --silent install left-pad`, `npm --prefix ./app install x`,
+# `npm -g install x`, `yarn --cwd app add zod`, `/usr/local/bin/npm install x` and
+# `npm.cmd install x` are documented, ordinary forms -- not evasion syntax -- and
+# every one of them was ALLOWED by both implementations.
+#
+# One stripping rule cannot cover both option shapes: dropping the following word
+# is required for `--cwd app` and wrong for `--silent`. So there are two stripped
+# haystacks and a pattern matching ANY of the three is a hit. Stripping into COPIES
+# rather than in place is also what keeps `gradle --refresh-dependencies` and
+# `npx --package` matchable -- those patterns contain the option, so they are
+# found in `hay` itself.
 base=$(printf '%s' "$cmd" | tr 'A-Z\t\n\r"\047\\' 'a-z     /' | tr -s ' /')
 hay=" $(printf '%s' "$base" | tr -s ';&|(){}\140' ' ') "
+STRIP_PATHS='s/[^ ]*\///g; s/\.cmd / /g; s/\.exe / /g; s/\.bat / /g'
+hay2=" $(printf '%s' "$hay" | sed "s/ -[^ ]*/ /g; $STRIP_PATHS" | tr -s ' ') "
+hay3=" $(printf '%s' "$hay" | sed "s/ -[^ ]* [^ ]*/ /g; $STRIP_PATHS" | tr -s ' ') "
 
 # --- the guard guards itself, on this path too ------------------------------
 # guard-packages.* blocks WRITES to the approval marker, the hook configuration
@@ -220,10 +251,12 @@ hay=" $(printf '%s' "$base" | tr -s ';&|(){}\140' ' ') "
 # There is deliberately NO approval marker escape hatch, matching the file
 # guard: the marker cannot authorise its own creation.
 #
-# `gate.sh`, `.gate-sha256`, `check-stubs.*` and `.gate-stubs-baseline` are
-# deliberately absent: they are pinned by CI (the `Pin the gate` step now asserts
-# the pin NAMES them, which is what makes that delegation real) and owned in
-# CODEOWNERS, and blocking them here would block `chmod +x gate.sh` during setup.
+# `gate.*`, `.gate-sha256`, `check-stubs.*` and `.gate-stubs-baseline` are
+# deliberately absent: they are pinned by CI (the `Pin the gate` step asserts that
+# the pin NAMES every one of them that exists, which is what makes that delegation
+# real -- it named only the POSIX halves for one release, so the .ps1 ratchet a
+# Windows developer runs was covered by nothing) and owned in CODEOWNERS. Blocking
+# them here would also block `chmod +x gate.sh` during setup.
 #
 # TWO structural rules, both learned from bypasses:
 #
@@ -272,7 +305,15 @@ while IFS= read -r seg; do
         w=${seg%% *}; w=${w##*/}
         case "$w" in
             cat|ls|grep|egrep|fgrep|diff|cmp|head|tail|wc|stat|file|test|'['|od|xxd|\
-            realpath|readlink|basename|dirname|sha256sum|shasum|md5sum|awk)
+            realpath|readlink|basename|dirname|sha256sum|shasum|md5sum)
+                continue ;;
+            awk)
+                # `awk` is on the read allowlist because the doctor reads
+                # settings.json with it -- but gawk's `-i inplace` WRITES, and
+                # `awk -i inplace 's/a/b/' .claude/settings.json` therefore walked
+                # straight through the allowlist. Any `-i` option disqualifies it;
+                # `awk '/matcher/' .claude/settings.json` still reads.
+                case " $seg " in *" -i"*) perimeter_hit=$gp; break ;; esac
                 continue ;;
             sh|bash|dash|zsh|ksh|pwsh|powershell)
                 # `sh .claude/hooks/verify-guard.sh` is how the doctor verifies.
@@ -290,7 +331,31 @@ while IFS= read -r seg; do
                 # Copying the file OUT is a read, and backing up the hook config
                 # before an upgrade is exactly what /framework-upgrade would do.
                 # Copying something ONTO it is not, and the destination is the
-                # last argument.
+                # last argument -- UNLESS the destination was named by an option,
+                # which is the whole point of `cp -t DIR SRC...` and
+                # `cp --target-directory=DIR SRC...`. With those, the last word is
+                # a SOURCE file, so the test below inspected the wrong argument
+                # and `cp -t .claude/hooks/ /tmp/x` overwrote a hook script while
+                # returning 0. Any target-directory option means the destination
+                # is not where this test looks, so judge it a write.
+                #
+                # Word by word, not one glob over the segment: `*" -"[!-]*"t "*`
+                # spans spaces, so `cp -v .claude/settings.json /tmp/out.txt` --
+                # an ordinary read -- matched on the `t ` ending an unrelated
+                # argument. `-T` reads as `-t` here because the whole command was
+                # case-folded upstream; that over-blocks `cp -T <perimeter> /tmp/x`
+                # and over-blocking is the direction this guard fails in.
+                _tflag=0
+                set -f
+                for _w in $seg; do
+                    case "$_w" in
+                        -t|--target-directory|--target-directory=*) _tflag=1; break ;;
+                        --*) ;;
+                        -*t) _tflag=1; break ;;
+                    esac
+                done
+                set +f
+                [ "$_tflag" = 0 ] || { perimeter_hit=$gp; break; }
                 case "${seg##* }" in *"$gp"*) perimeter_hit=$gp; break ;; esac
                 continue ;;
         esac
@@ -371,6 +436,12 @@ hit=""
 while IFS= read -r p; do
     [ -n "$p" ] || continue
     case "$hay" in
+        *" $p "*) hit=$p; break ;;
+    esac
+    case "$hay2" in
+        *" $p "*) hit=$p; break ;;
+    esac
+    case "$hay3" in
         *" $p "*) hit=$p; break ;;
     esac
 done <<EOF

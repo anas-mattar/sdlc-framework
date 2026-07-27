@@ -38,6 +38,14 @@ try { $data = $inputJson | ConvertFrom-Json } catch {
 $filePath = $data.tool_input.file_path
 if (-not $filePath) { $filePath = $data.tool_input.notebook_path }
 if (-not $filePath) { exit 0 }
+# A path that is not a STRING is a path neither implementation can judge.
+# `{"file_path":["package.json"]}` used to be flattened by PowerShell's string
+# coercion here and skipped entirely by the .sh parser -- blocked on one platform,
+# allowed on the other, for the same payload.
+if ($filePath -isnot [string]) {
+    [Console]::Error.WriteLine("BLOCKED: the package guard could not read the target path out of the hook payload, so it cannot tell whether this edits a package manifest. This is a bug in the guard, not in your edit -- report it with the path you were editing.")
+    exit 2
+}
 
 # Split-Path handles backslashes but not forward slashes in every PowerShell
 # version, and Claude Code reports both. Take the last segment either way.

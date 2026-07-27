@@ -55,6 +55,56 @@ fi
 
 TAB=$(printf '\t')
 fail=0
+substituted=0
+
+# --- the lists must still be the size they shipped --------------------------
+# Behavioural cases can only ever sample. Cutting INSTALL_COMMANDS down to exactly
+# the handful this script exercises left it printing GUARD: verified while
+# `npx cowsay`, `pnpm add react`, `cargo add serde`, `bun install`, `gem install
+# rails` and `composer require` all returned 0 -- an 85% cut, certified. The
+# framework's 99-case fixture would catch that, but that fixture lives in the
+# framework repository, not in an installed project, where THIS script is the only
+# mechanical check there is.
+#
+# So the size is asserted as well as the behaviour: a floor, ratcheted the same way
+# the rest of the framework ratchets. Adding patterns is free; removing one means
+# lowering a number here, in the same diff, where a reviewer sees it.
+GUARDED_FLOOR=86
+INSTALL_FLOOR=56
+
+# The two .sh lists are shaped differently and must be counted differently: the
+# manifest patterns are whitespace-separated across lines, the install patterns are
+# one PER LINE because they contain spaces (`dotnet add package`). Counting words
+# in the install list reported 117 for 56 entries, and a floor that a half-emptied
+# list still clears is not a floor. In the .ps1 hooks both lists are quoted
+# strings, so one rule covers them.
+list_size() {  # list_size <hook script> <begin marker> <end marker> <words|lines>
+    [ -f "$1" ] || { echo 0; return; }
+    case "$1" in
+        *.ps1) sed -n "/$2/,/$3/p" "$1" | grep -oE "'[^']+'" | grep -c . ;;
+        *)
+            body=$(sed -n "/$2/,/$3/p" "$1" | sed '1d;$d' | tr -d '"' | sed 's/^[A-Z_]*=//')
+            case "$4" in
+                lines) printf '%s\n' "$body" | grep -c '[^[:space:]]' ;;
+                *)     printf '%s\n' "$body" | tr ' \t' '\n\n' | grep -c . ;;
+            esac ;;
+    esac
+}
+
+check_list_size() {  # check_list_size <configured command> <begin> <end> <floor> <label> <words|lines>
+    # The script is the last word of the configured command -- the same
+    # assumption runnable_or_twin makes.
+    script=${1##* }
+    n=$(list_size "$script" "$2" "$3" "$6")
+    if [ "$n" -ge "$4" ]; then
+        echo "  PASS  $5 list has $n entries (floor $4)"
+    else
+        echo "  FAIL  $5 list has $n entries, expected at least $4 -- $script has been"
+        echo "        cut down. Patterns removed from the list are silently unguarded;"
+        echo "        the behavioural cases below only sample it."
+        fail=1
+    fi
+}
 
 # The WIRING is checked as configured; the BEHAVIOUR needs a command this machine
 # can actually run. settings.json ships the PowerShell commands, because that is
@@ -68,6 +118,14 @@ fail=0
 # CI. It does not weaken anything -- the matcher and the presence of both hooks are
 # still checked against what is really configured, and a configured command that
 # names a hook script which does not exist still fails.
+#
+# When it fires, this script may NOT report `GUARD: verified`. It tested a
+# different file from the one Claude Code will run, and on Linux and macOS that is
+# not a rare case -- it is the SHIPPED DEFAULT, because settings.json ships the
+# PowerShell commands. Replacing both .ps1 hooks with `exit 0` and running this
+# script produced `GUARD: verified`, rc=0, and a green CI step, which is precisely
+# the failure the header says this file exists to detect. It now exits 3, and the
+# CI step treats anything non-zero as a failure.
 runnable_or_twin() {  # runnable_or_twin <configured command>, sets RUN_CMD
     RUN_CMD="$1"
     interp=${1%% *}
@@ -78,8 +136,10 @@ runnable_or_twin() {  # runnable_or_twin <configured command>, sets RUN_CMD
             twin=${twin%.ps1}.sh
             if [ -f "$twin" ] && command -v sh >/dev/null 2>&1; then
                 echo "  NOTE  '$interp' is not on this machine; testing $twin instead."
-                echo "        The wiring above is what is really configured."
+                echo "        The wiring above is what is really configured, and the"
+                echo "        configured hook is NOT what the cases below exercise."
                 RUN_CMD="sh $twin"
+                substituted=1
                 return 0
             fi ;;
     esac
@@ -137,6 +197,8 @@ else
         echo "  FAIL  the matcher covers Edit but not Write — an agent can create a manifest."
         fail=1
     fi
+    check_list_size "$file_cmd" GUARDED-MANIFESTS-BEGIN GUARDED-MANIFESTS-END \
+        "$GUARDED_FLOOR" "manifest" words
     runnable_or_twin "$file_cmd" && file_cmd="$RUN_CMD"
 
     echo "guarded paths must be BLOCKED (exit 2):"
@@ -154,6 +216,15 @@ else
     file_case "$file_cmd" "Gemfile"                  "Gemfile"                   2
     file_case "$file_cmd" "pom.xml"                  "pom.xml"                   2
     file_case "$file_cmd" "composer.json"            "composer.json"             2
+    # One from each part of the list, not five from the front of it: these are the
+    # entries a gutted list loses first, and they were all allowed by a list cut
+    # down to exactly what this script used to test.
+    file_case "$file_cmd" "package-lock.json"        "package-lock.json"         2
+    file_case "$file_cmd" ".npmrc"                   ".npmrc"                    2
+    file_case "$file_cmd" "go.sum"                   "go.sum"                    2
+    file_case "$file_cmd" "global.json"              "global.json"               2
+    file_case "$file_cmd" "Dockerfile"               "Dockerfile"                2
+    file_case "$file_cmd" ".cargo/config.toml"       ".cargo/config.toml"        2
     # Case-insensitive filesystems: on macOS this writes the real manifest.
     file_case "$file_cmd" "Package.json (case)"      "Package.json"              2
     # The guard's own configuration. Without these an agent that is blocked
@@ -185,6 +256,8 @@ if [ -z "$inst_cmd" ]; then
     fail=1
 else
     echo "install guard: $inst_cmd"
+    check_list_size "$inst_cmd" INSTALL-COMMANDS-BEGIN INSTALL-COMMANDS-END \
+        "$INSTALL_FLOOR" "install-command" lines
     runnable_or_twin "$inst_cmd" && inst_cmd="$RUN_CMD"
     echo "install commands must be BLOCKED (exit 2):"
     cmd_case "$inst_cmd" "npm install"        "npm install left-pad"       2
@@ -192,15 +265,70 @@ else
     cmd_case "$inst_cmd" "dotnet add package" "dotnet add package Serilog" 2
     cmd_case "$inst_cmd" "pip install"        "pip install requests"       2
     cmd_case "$inst_cmd" "go get"             "go get github.com/x/y"      2
+    # Spread across the list rather than clustered at its front, for the reason
+    # given above the manifest cases.
+    cmd_case "$inst_cmd" "npx"                "npx cowsay hi"              2
+    cmd_case "$inst_cmd" "pnpm add"           "pnpm add react"             2
+    cmd_case "$inst_cmd" "cargo add"          "cargo add serde"            2
+    cmd_case "$inst_cmd" "bun install"        "bun install"                2
+    cmd_case "$inst_cmd" "gem install"        "gem install rails"          2
+    cmd_case "$inst_cmd" "composer require"   "composer require monolog"   2
+    # An option between the tool and its subcommand is a documented invocation,
+    # and both implementations allowed it for three releases.
+    cmd_case "$inst_cmd" "npm --silent install" "npm --silent install x"   2
 
     echo "build commands must be ALLOWED (exit 0):"
     cmd_case "$inst_cmd" "npm run build"      "npm run build"              0
     cmd_case "$inst_cmd" "git status"         "git status"                 0
+
+    # --- the install guard's OWN perimeter -----------------------------------
+    # This block did not exist. The file guard's self-protection was tested and
+    # the install guard's -- roughly ninety lines of it -- was not, so deleting
+    # the entire perimeter block from guard-installs and changing nothing else
+    # produced `GUARD: verified`, rc=0, while `rm .claude/hooks/guard-packages.sh`
+    # and `touch .claude/allow-package-changes` both returned 0. What CI asserts
+    # is what stays true; everything else is a comment.
+    echo "the guard's own perimeter must be BLOCKED (exit 2):"
+    cmd_case "$inst_cmd" "creating the approval marker" \
+        "touch .claude/allow-package-changes"                              2
+    cmd_case "$inst_cmd" "deleting a hook script" \
+        "rm .claude/hooks/guard-packages.sh"                               2
+    cmd_case "$inst_cmd" "editing the hook configuration in place" \
+        "sed -i s/a/b/ .claude/settings.json"                              2
+    cmd_case "$inst_cmd" "overwriting the configuration by redirection" \
+        "printf {} > .claude/settings.json"                                2
+    # A read earlier in the same command used to move the inspected window off
+    # the write that followed it.
+    cmd_case "$inst_cmd" "a read before the write does not shelter it" \
+        "ls .claude/settings.json && printf {} > .claude/settings.json"    2
+    cmd_case "$inst_cmd" "removing the whole directory" \
+        "rm -rf .claude"                                                   2
+
+    echo "reading the guard's own files must be ALLOWED (exit 0):"
+    cmd_case "$inst_cmd" "reading the configuration" \
+        "cat .claude/settings.json"                                        0
+    cmd_case "$inst_cmd" "running a hook -- this script does it" \
+        "sh .claude/hooks/verify-guard.sh"                                 0
 fi
 
-if [ $fail -eq 0 ]; then
+if [ $fail -eq 0 ] && [ $substituted -eq 0 ]; then
     echo "GUARD: verified — manifest edits and install commands are both blocked without approval."
     exit 0
+fi
+if [ $fail -eq 0 ]; then
+    # Everything passed, but not on the hook Claude Code will invoke. Saying
+    # "verified" here is the lie this script exists to prevent someone else from
+    # telling. Exit 3 rather than 0 or 1: it is not a broken guard, and it is not
+    # a verified one either, and CI must not go green on it.
+    echo "GUARD: partially verified (configured interpreter absent — the twin was tested,"
+    echo "  not the configured hook). The hook Claude Code actually runs is UNTESTED here,"
+    echo "  and an unrunnable hook command fails OPEN: Claude Code treats it as a hook"
+    echo "  error, not a block. Point settings.json at the interpreter this machine has:"
+    echo "    macOS/Linux:  sh .claude/hooks/guard-packages.sh    (matcher: Edit|MultiEdit|Write|NotebookEdit)"
+    echo "                  sh .claude/hooks/guard-installs.sh    (matcher: Bash)"
+    echo "    Windows:      powershell -NoProfile -File .claude/hooks/guard-packages.ps1"
+    echo "                  powershell -NoProfile -File .claude/hooks/guard-installs.ps1"
+    exit 3
 fi
 echo "GUARD: BROKEN — a guard is not enforcing. Fix .claude/settings.json before"
 echo "  trusting the package rule; on macOS/Linux the two commands should be:"

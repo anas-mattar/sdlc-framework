@@ -61,6 +61,33 @@ $Exempt = 'approved-stub:\s*\S'
 # The case-sensitivity of each rule is deliberate and matched to the .sh:
 # extensions are case-INSENSITIVE (`-match`), everything else is case-SENSITIVE
 # (`-cmatch`, `-clike`, `-ceq`, and .NET's ordinal `.Contains`).
+
+# Is this basename a TEST file? Split into TOKENS at `.`, `_` and `-`, and ask
+# whether any token IS the word test/tests/spec/specs -- or ends with it in
+# CamelCase, which is how .NET, Java and Scala name theirs.
+#
+# The rule used to be the substring `[Tt]est`, and a substring is not a word:
+# `git mv src/ledger.ts src/latest-ledger.ts` took the count from 1 to 0 on both
+# implementations, and `protest.go`, `contest.rb`, `Greatest.cs` and
+# `attestation.ts` were invisible to the ratchet for as long as they existed.
+#
+# Erring the other way is deliberate: `Testing.cs` and `TestHelpers.cs` are now
+# SOURCE, so their markers count. A ratchet that counts too much fails loudly and
+# gets fixed; one that counts too little reports a floor nobody is standing on.
+#
+# Mirrored token for token in check-stubs.sh's is_test_name.
+function Test-IsTestName([string]$Name) {
+    foreach ($t in ($Name -split '[._-]')) {
+        if ($t -ceq 'test' -or $t -ceq 'tests' -or $t -ceq 'Test' -or $t -ceq 'Tests' -or
+            $t -ceq 'spec' -or $t -ceq 'specs' -or $t -ceq 'Spec' -or $t -ceq 'Specs') { return $true }
+        # CamelCase: `OrderTests`, `UserSpec`. A lower-case letter or digit before
+        # the capital is what keeps `Greatest` out -- its `test` is lower case and
+        # so is not a word boundary.
+        if ($t -cmatch '[a-z0-9](Test|Tests|Spec|Specs)$') { return $true }
+    }
+    return $false
+}
+
 function Test-IsSource([string]$Path) {
     $p = ($Path -replace '\\', '/').TrimEnd('/')
     $b = $p.Substring($p.LastIndexOf('/') + 1)
@@ -70,8 +97,7 @@ function Test-IsSource([string]$Path) {
     if ($b -ceq 'check-stubs.sh' -or $b -ceq 'check-stubs.ps1') { return $false }
     if ($b -match '\.(md|txt|json|yml|yaml|csv|svg|lock|sum)$') { return $false }
     if ($b -clike '*.min.js') { return $false }
-    if ($b -cmatch '[Tt]est') { return $false }
-    if ($b -cmatch '[Ss]pec\.') { return $false }
+    if (Test-IsTestName $b) { return $false }
     $segments = '/' + $p
     foreach ($d in @('node_modules', 'vendor', 'dist', 'build',
                      'test', 'tests', 'Test', 'Tests', '__tests__', 'spec', 'specs')) {
@@ -84,7 +110,23 @@ function Test-IsSource([string]$Path) {
 function Get-StubLines {
     # Tracked files plus untracked-but-not-ignored ones: the gate runs on a dirty
     # tree, and a stub added in an uncommitted file is exactly what this catches.
-    $files = @(git ls-files --cached --others --exclude-standard 2>$null)
+    #
+    # `-c core.quotePath=false` is not cosmetic. git's DEFAULT renders any
+    # non-ASCII path as a quoted C string -- `src/caf\303\251.ts` comes back as
+    # `"src/caf\303\251.ts"`, which is not the name of any file, so Test-Path
+    # failed and the file was skipped in silence. `mv ledger.ts ledger.ts` with any
+    # accented character in the new name therefore removed its markers from the
+    # count with no message, on this side and on the .sh side both.
+    # ...and the encoding is the other half of the same bug. PowerShell decodes a
+    # native command's stdout with [Console]::OutputEncoding, which on Windows is
+    # the OEM code page, so git's UTF-8 bytes for `src/cafe.ts` (with an accent)
+    # arrived as mojibake and Test-Path returned False on a file that is right
+    # there. Both halves have to be fixed or the file is still invisible.
+    $prevEnc = [Console]::OutputEncoding
+    try {
+        [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+        $files = @(git -c core.quotePath=false ls-files --cached --others --exclude-standard 2>$null)
+    } finally { [Console]::OutputEncoding = $prevEnc }
     $hits = @()
     foreach ($f in $files) {
         if (-not (Test-IsSource $f)) { continue }
@@ -136,9 +178,16 @@ if ($Count) {
 }
 
 if ($Baseline) {
-    Set-Content -LiteralPath $BaselineFile -Value $current -NoNewline
+    # The trailing newline is REQUIRED, and `-NoNewline` with an explicit "`n" is
+    # how PowerShell writes exactly one. `echo` on the .sh side writes "1\n"; this
+    # wrote "1" with no newline, so the same count produced a different SHA-256 --
+    # and .gate-stubs-baseline is pinned. A Windows developer re-baselining at an
+    # unchanged count therefore tripped "CHANGED: a pinned file does not match ...
+    # the gate has been weakened -- find out by whom", and a control that cries
+    # wolf on a no-op is one people learn to regenerate reflexively.
+    Set-Content -LiteralPath $BaselineFile -Value "$current`n" -NoNewline -Encoding ASCII
     Write-Host "STUBS: baseline set to $current -- commit $BaselineFile."
-    Write-Host "  Pin it too, in the same commit:  sha256sum gate.sh check-stubs.sh $BaselineFile > .gate-sha256"
+    Write-Host "  Pin it too, in the same commit:  sha256sum gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 $BaselineFile > .gate-sha256"
     exit 0
 }
 

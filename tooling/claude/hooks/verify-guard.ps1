@@ -45,6 +45,59 @@ if (-not $entries -or $entries.Count -eq 0) {
 
 $fail = $false
 
+# --- the lists must still be the size they shipped --------------------------
+# Behavioural cases can only ever sample. Cutting the install list down to exactly
+# the handful this script exercises left it printing GUARD: verified while
+# `npx cowsay`, `pnpm add react`, `cargo add serde`, `bun install`, `gem install
+# rails` and `composer require` all returned 0 -- an 85% cut, certified. The
+# framework's 99-case fixture would catch that, but it lives in the framework
+# repository, not in an installed project, where THIS script is the only
+# mechanical check there is. Adding patterns is free; removing one means lowering
+# a number here, in the same diff, where a reviewer sees it.
+$GuardedFloor = 86
+$InstallFloor = 56
+
+# The two .sh lists are shaped differently and must be counted differently: the
+# manifest patterns are whitespace-separated across lines, the install patterns are
+# one PER LINE because they contain spaces (`dotnet add package`). Counting words
+# in the install list reported 117 for 56 entries, and a floor that a half-emptied
+# list still clears is not a floor. In the .ps1 hooks both are quoted strings, so
+# one rule covers them.
+function Get-ListSize([string]$Script, [string]$Begin, [string]$End, [string]$Mode) {
+    if (-not (Test-Path -LiteralPath $Script)) { return 0 }
+    $lines = @(Get-Content -LiteralPath $Script)
+    $in = $false; $n = 0
+    foreach ($l in $lines) {
+        if ($l -match $End) { break }
+        if ($in) {
+            if ($Script -like '*.ps1') {
+                $n += ([regex]::Matches($l, "'[^']+'")).Count
+            } elseif ($Mode -eq 'lines') {
+                if ($l -match '\S') { $n++ }
+            } else {
+                $n += @(($l -replace '"', '') -replace '^[A-Z_]*=', '' -split '\s+' |
+                        Where-Object { $_ -ne '' }).Count
+            }
+        }
+        if ($l -match $Begin) { $in = $true }
+    }
+    return $n
+}
+
+function Test-ListSize([string]$Command, [string]$Begin, [string]$End, [int]$Floor, [string]$Label, [string]$Mode) {
+    # The script is the last word of the configured command.
+    $script = ($Command -split '\s+')[-1]
+    $n = Get-ListSize $script $Begin $End $Mode
+    if ($n -ge $Floor) {
+        Write-Host "  PASS  $Label list has $n entries (floor $Floor)"
+    } else {
+        Write-Host "  FAIL  $Label list has $n entries, expected at least $Floor -- $script has"
+        Write-Host "        been cut down. Patterns removed from the list are silently"
+        Write-Host "        unguarded; the behavioural cases below only sample it."
+        $script:fail = $true
+    }
+}
+
 # Find the command wired to a matcher that COVERS a given tool name. Padding both
 # sides with '|' means one comparison handles a tool wherever it sits in
 # "Edit|MultiEdit|Write|NotebookEdit", including when it stands alone.
@@ -96,6 +149,7 @@ if (-not $fileCmd) {
     $fail = $true
 } else {
     Write-Host "file guard: $fileCmd"
+    Test-ListSize $fileCmd 'GUARDED-MANIFESTS-BEGIN' 'GUARDED-MANIFESTS-END' $GuardedFloor 'manifest' 'words'
 
     # Pre-flight: if the hook cannot run at all, say so once rather than per case.
     if ($null -eq (Invoke-Hook $fileCmd (FilePayload "src/app.ts"))) {
@@ -127,6 +181,15 @@ if (-not $fileCmd) {
     Test-Case $fileCmd "Gemfile"                  (FilePayload "Gemfile")                  2
     Test-Case $fileCmd "pom.xml"                  (FilePayload "pom.xml")                  2
     Test-Case $fileCmd "composer.json"            (FilePayload "composer.json")            2
+    # One from each part of the list, not five from the front of it: these are the
+    # entries a gutted list loses first, and a list cut down to exactly what this
+    # script used to test allowed every one of them.
+    Test-Case $fileCmd "package-lock.json"        (FilePayload "package-lock.json")        2
+    Test-Case $fileCmd ".npmrc"                   (FilePayload ".npmrc")                   2
+    Test-Case $fileCmd "go.sum"                   (FilePayload "go.sum")                   2
+    Test-Case $fileCmd "global.json"              (FilePayload "global.json")              2
+    Test-Case $fileCmd "Dockerfile"               (FilePayload "Dockerfile")               2
+    Test-Case $fileCmd ".cargo/config.toml"       (FilePayload ".cargo/config.toml")       2
     # The guard's own configuration. Without these an agent that is blocked simply
     # writes the approval marker whose name the block message just supplied.
     Test-Case $fileCmd "the approval marker"      (FilePayload ".claude/allow-package-changes") 2
@@ -152,16 +215,55 @@ if (-not $instCmd) {
     $fail = $true
 } else {
     Write-Host "install guard: $instCmd"
+    Test-ListSize $instCmd 'INSTALL-COMMANDS-BEGIN' 'INSTALL-COMMANDS-END' $InstallFloor 'install-command' 'lines'
     Write-Host "install commands must be BLOCKED (exit 2):"
     Test-Case $instCmd "npm install"        (CmdPayload "npm install left-pad")       2
     Test-Case $instCmd "yarn add"           (CmdPayload "yarn add zod")               2
     Test-Case $instCmd "dotnet add package" (CmdPayload "dotnet add package Serilog") 2
     Test-Case $instCmd "pip install"        (CmdPayload "pip install requests")       2
     Test-Case $instCmd "go get"             (CmdPayload "go get github.com/x/y")      2
+    # Spread across the list rather than clustered at its front.
+    Test-Case $instCmd "npx"                (CmdPayload "npx cowsay hi")              2
+    Test-Case $instCmd "pnpm add"           (CmdPayload "pnpm add react")             2
+    Test-Case $instCmd "cargo add"          (CmdPayload "cargo add serde")            2
+    Test-Case $instCmd "bun install"        (CmdPayload "bun install")                2
+    Test-Case $instCmd "gem install"        (CmdPayload "gem install rails")          2
+    Test-Case $instCmd "composer require"   (CmdPayload "composer require monolog")   2
+    # An option between the tool and its subcommand is a documented invocation,
+    # and both implementations allowed it for three releases.
+    Test-Case $instCmd "npm --silent install" (CmdPayload "npm --silent install x")   2
 
     Write-Host "build commands must be ALLOWED (exit 0):"
     Test-Case $instCmd "npm run build"      (CmdPayload "npm run build")              0
     Test-Case $instCmd "git status"         (CmdPayload "git status")                 0
+
+    # --- the install guard's OWN perimeter -----------------------------------
+    # This block did not exist. The file guard's self-protection was tested and
+    # the install guard's -- roughly ninety lines of it -- was not, so deleting
+    # the entire perimeter block and changing nothing else produced
+    # GUARD: verified while `rm .claude/hooks/guard-packages.ps1` and
+    # `touch .claude/allow-package-changes` both returned 0.
+    Write-Host "the guard's own perimeter must be BLOCKED (exit 2):"
+    Test-Case $instCmd "creating the approval marker" `
+        (CmdPayload "touch .claude/allow-package-changes")                            2
+    Test-Case $instCmd "deleting a hook script" `
+        (CmdPayload "rm .claude/hooks/guard-packages.ps1")                            2
+    Test-Case $instCmd "editing the hook configuration in place" `
+        (CmdPayload "sed -i s/a/b/ .claude/settings.json")                            2
+    Test-Case $instCmd "overwriting the configuration by redirection" `
+        (CmdPayload "printf {} > .claude/settings.json")                              2
+    # A read earlier in the same command used to move the inspected window off
+    # the write that followed it.
+    Test-Case $instCmd "a read before the write does not shelter it" `
+        (CmdPayload "ls .claude/settings.json && printf {} > .claude/settings.json")  2
+    Test-Case $instCmd "removing the whole directory" `
+        (CmdPayload "rm -rf .claude")                                                 2
+
+    Write-Host "reading the guard's own files must be ALLOWED (exit 0):"
+    Test-Case $instCmd "reading the configuration" `
+        (CmdPayload "cat .claude/settings.json")                                      0
+    Test-Case $instCmd "running a hook -- the doctor does this" `
+        (CmdPayload "sh .claude/hooks/verify-guard.sh")                               0
 }
 
 if (-not $fail) {

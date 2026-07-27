@@ -37,6 +37,15 @@ try { $data = $inputJson | ConvertFrom-Json } catch {
 # Only Bash calls carry a command. Anything else is not ours to judge.
 $cmd = $data.tool_input.command
 if (-not $cmd) { exit 0 }
+# A command that is not a STRING is a command neither implementation can judge.
+# `{"command":["npm","install","x"]}` used to be flattened by PowerShell's string
+# coercion here and skipped entirely by the .sh parser -- blocked on one platform,
+# allowed on the other, for the same payload. Fail closed on both, with the same
+# message the .sh hook prints when its parser gives up.
+if ($cmd -isnot [string]) {
+    [Console]::Error.WriteLine("BLOCKED: the install guard could not read the command out of the hook payload, so it cannot tell whether this installs packages. This is a bug in the guard, not in your command -- report it with the command you ran.")
+    exit 2
+}
 
 # Match whole word sequences, not substrings: `npm i` must block `npm i left-pad`
 # without blocking `npm info`. Collapsing whitespace and padding both ends means
@@ -48,13 +57,32 @@ if (-not $cmd) { exit 0 }
 # was a quote, not a space. `\x27` is the single quote and `\x60` the backtick.
 # `>` and `<` are deliberately left alone; the perimeter block below reads them.
 #
-# ONE normalisation, two views of it, exactly as in the .sh twin:
+# ONE normalisation, several views of it, exactly as in the .sh twin:
 #   $base  case-folded, quotes gone, backslashes folded to `/`, whitespace
 #          squeezed; shell separators and redirections still present
 #   $hay   $base with the separators collapsed to spaces, for the install match
+#   $hay2  $hay with OPTION words, DIRECTORY prefixes and Windows executable
+#          suffixes removed, so a tool and its subcommand separated by a flag end
+#          up adjacent
+#   $hay3  the same, except each option word takes the word AFTER it with it --
+#          which is what an option with an ARGUMENT looks like
 #   the perimeter loop below splits $base INTO simple commands at those separators
+#
+# WHY THREE HAYSTACKS.
+# `npm --silent install x`, `npm --prefix ./app install x`, `npm -g install x`,
+# `yarn --cwd app add zod`, `/usr/bin/npm install x` and `npm.cmd install x` are
+# documented forms, and every one was ALLOWED. One rule cannot cover both option
+# shapes -- dropping the following word is required for `--cwd app` and wrong for
+# `--silent` -- so a pattern matching ANY of the three haystacks is a hit.
+# Stripping into COPIES also keeps `gradle --refresh-dependencies` and
+# `npx --package` matchable in $hay itself.
 $base = ((($cmd -replace '[\s"\x27]+', ' ') -replace '\\', '/') -replace '/+', '/').ToLowerInvariant().Trim()
 $hay = ' ' + ($base -replace '[\s;&|(){}\x60]+', ' ') + ' '
+function Squeeze([string]$s) {
+    ' ' + (((($s -replace '[^ ]*/', '') -replace '\.(cmd|exe|bat) ', ' ') -replace '\s+', ' ').Trim()) + ' '
+}
+$hay2 = Squeeze ($hay -replace ' -[^ ]*', ' ')
+$hay3 = Squeeze ($hay -replace ' -[^ ]* [^ ]*', ' ')
 
 # --- the guard guards itself, on this path too ------------------------------
 # guard-packages.* blocks WRITES to the approval marker, the hook configuration and
@@ -66,10 +94,11 @@ $hay = ' ' + ($base -replace '[\s;&|(){}\x60]+', ' ') + ' '
 # guard never sees them. There is deliberately NO approval marker escape hatch,
 # matching the file guard: the marker cannot authorise its own creation.
 #
-# `gate.sh`, `.gate-sha256`, `check-stubs.*` and `.gate-stubs-baseline` are
-# deliberately absent: they are pinned by CI (the pin step now asserts the pin
-# NAMES them) and owned in CODEOWNERS, and blocking them here would block
-# `chmod +x gate.sh` during setup.
+# `gate.*`, `.gate-sha256`, `check-stubs.*` and `.gate-stubs-baseline` are
+# deliberately absent: they are pinned by CI (the pin step asserts the pin NAMES
+# every one of them that exists -- it named only the POSIX halves for one release,
+# so the .ps1 ratchet was covered by nothing) and owned in CODEOWNERS, and blocking
+# them here would block `chmod +x gate.sh` during setup.
 #
 # TWO structural rules, both learned from bypasses, both mirrored from the .sh:
 #
@@ -85,7 +114,7 @@ $hay = ' ' + ($base -replace '[\s;&|(){}\x60]+', ' ') + ' '
 #      blocked rather than allowed.
 $readOnly = @('cat', 'ls', 'grep', 'egrep', 'fgrep', 'diff', 'cmp', 'head', 'tail',
               'wc', 'stat', 'file', 'test', '[', 'od', 'xxd', 'realpath', 'readlink',
-              'basename', 'dirname', 'sha256sum', 'shasum', 'md5sum', 'awk')
+              'basename', 'dirname', 'sha256sum', 'shasum', 'md5sum')
 $shellVerbs = @('sh', 'bash', 'dash', 'zsh', 'ksh', 'pwsh', 'powershell')
 $gitReads = @('diff', 'status', 'log', 'show', 'ls-files', 'grep', 'blame', 'cat-file')
 $perimeterHit = ''
@@ -107,6 +136,13 @@ foreach ($rawSeg in ($base -split '[;&|()\x60]')) {
         if ($slash -ge 0) { $w = $w.Substring($slash + 1) }
         $padded = " $seg "
         if ($readOnly -contains $w) { continue }
+        if ($w -eq 'awk') {
+            # `awk` reads -- the doctor reads settings.json with it -- but gawk's
+            # `-i inplace` WRITES, so any `-i` option disqualifies it from the
+            # read allowlist. `awk '/matcher/' .claude/settings.json` still reads.
+            if ($padded -match ' -i') { $perimeterHit = $gp; break }
+            continue
+        }
         if ($shellVerbs -contains $w) {
             # `sh .claude/hooks/verify-guard.sh` is how the doctor verifies.
             # `sh -c "rm .claude/hooks/x"` is not: the payload is another command,
@@ -122,7 +158,12 @@ foreach ($rawSeg in ($base -split '[;&|()\x60]')) {
         }
         if ($w -eq 'cp') {
             # Copying the file OUT is a read; copying something ONTO it is not,
-            # and the destination is the last argument.
+            # and the destination is the last argument -- UNLESS an option named
+            # it. `cp -t DIR SRC...` and `cp --target-directory=DIR SRC...` put
+            # the destination FIRST, so the last word is a source file and this
+            # test inspected the wrong argument: `cp -t .claude/hooks/ /tmp/x`
+            # overwrote a hook script and returned 0.
+            if ($padded -match ' -([^- ]*t )| --target-directory') { $perimeterHit = $gp; break }
             $words = $seg.Split(' ')
             if ($words[$words.Count - 1].Contains($gp)) { $perimeterHit = $gp; break }
             continue
@@ -159,7 +200,7 @@ $installCommands = @(
 )
 
 foreach ($p in $installCommands) {
-    if ($hay -like "* $p *") {
+    if (($hay -like "* $p *") -or ($hay2 -like "* $p *") -or ($hay3 -like "* $p *")) {
         if (Test-Path '.claude/allow-package-changes') { exit 0 }
         [Console]::Error.WriteLine("BLOCKED: this command installs or updates packages ('$p'). Adding or changing dependencies requires approval in the feature's plan.md (or spec.md on Small-tier projects, which have no plan.md). If the approved spec covers it, ask the user to create .claude/allow-package-changes and retry -- do not create it yourself.")
         exit 2

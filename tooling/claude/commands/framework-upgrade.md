@@ -47,8 +47,12 @@ each file came from. Read it first: every later step depends on it.
 
 ## Step 3 — detect local drift BEFORE proposing anything
 
-This is the step that earns the command. Walk **`files[]` from the manifest** — not
-a hardcoded list of directories. For each entry, compare the installed path against
+This is the step that earns the command. Walk **`files[]` and `per_repo_files[]`
+from the manifest** — not a hardcoded list of directories. `per_repo_files[]`
+entries are expanded once per entry in `repos[]`, substituting `{{REPO_DIR}}` with
+that repo's path and `{{REPO_STACK_FAMILY}}` with its gate family; walking only
+`files[]` leaves every repo's gate and stub ratchet unexamined, which is the
+silent skip this manifest exists to end. For each entry, compare the installed path against
 its `upstream` path **as it was at the recorded version**, not against the new
 version, which would flag every legitimate upstream change as local drift:
 
@@ -136,7 +140,7 @@ After the user approves:
    is **not** complete until the user confirms them.
 3. Update **both** version records: `framework_version` in
    `.claude/framework-manifest.json` and the `Framework: sdlc-framework vX.Y.Z`
-   line in `CLAUDE.md`. Add `files[]` entries for anything newly installed, and
+   line in `CLAUDE.md`. Add `files[]` (or `per_repo_files[]`) entries for anything newly installed, and
    remove entries for anything the new version deleted — a manifest that is stale
    is worse than none, because the next upgrade trusts it.
 4. Run `/framework-doctor` and report its output.

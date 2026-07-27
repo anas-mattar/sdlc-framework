@@ -144,13 +144,23 @@ END {
         if (index(pend, "\\")) { pend = unesc(pend); if (bad) exit 4 }
       } else pend = ""
       pdepth = depth
-      if (ti > 0 && depth == ti && (pend == key || (key2 != "" && pend == key2))) {
-        r = nx; sub(/^[ \t\r\n]*:[ \t\r\n]*/, "", r)
-        if (r == "") hit = 1
-      }
+      # `hit` means the payload NAMES this key inside tool_input. Whether a
+      # readable string comes back is decided below; if none does, the END block
+      # exits 4 and the hook BLOCKS. It used to require the value to begin with a
+      # quote (`r == ""`), so a NON-STRING value fell through to exit 3 -- "not a
+      # call this hook judges" -- and `{"command":["npm","install","x"]}` was
+      # ALLOWED here while the .ps1 twin blocked it. A value this parser cannot
+      # read is a value it cannot judge, whatever its type.
+      if (ti > 0 && depth == ti && (pend == key || (key2 != "" && pend == key2))) hit = 1
     } else {
+      # No `got == 0` guard: the LAST occurrence of a duplicated key wins, which
+      # is what ConvertFrom-Json does on the .ps1 side. First-wins here and
+      # last-wins there meant a payload with two `command` keys was judged on a
+      # different string per platform, so each implementation failed open in one
+      # direction: `{"command":"npm install evil","command":"ls"}` was read as the
+      # install by one and as `ls` by the other.
       if (ti > 0 && depth == ti && pdepth == depth && \
-          ((pend == key && got == 0) || (key2 != "" && pend == key2 && got2 == 0))) {
+          (pend == key || (key2 != "" && pend == key2))) {
         v = seg[st]
         for (x = st + 1; x <= k; x++) v = v "\"" seg[x]
         if (length(v) > 65536) exit 4

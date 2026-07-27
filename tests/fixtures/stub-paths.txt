@@ -1,71 +1,100 @@
-# Paths fed to BOTH check-stubs implementations' --classify/-Classify mode. The
-# two must agree on every line; tests/framework-checks.sh diffs the answers.
+# Paths fed to BOTH check-stubs implementations' --classify/-Classify mode, WITH
+# the verdict each one must return. The format is exactly what --classify prints:
+#
+#     source <path>     this file's markers count toward the ratchet
+#     skip   <path>     this file is not shipped behaviour
+#
+# tests/framework-checks.sh strips the verdict column to build the input, runs
+# both implementations, and diffs their output against THIS FILE.
 #
 # One path per line. Blank lines and lines starting with `#` are ignored. The
-# files do not have to exist -- classification is a decision about the PATH.
+# files do not have to exist -- classification is a decision about the PATH. Paths
+# containing spaces do not belong here: `--classify` takes a word list and
+# `-Classify` takes a comma-separated string, so neither can carry one. The
+# enumeration of such paths is covered by the planted-count check instead.
 #
-# WHY THIS FILE EXISTS. The two implementations were compared by diffing their
-# marker regexes, which are identical and always were. The disagreement lived in
-# the file filter next to them: the .sh matched `*[Tt]est*` against the whole path
-# and the .ps1 matched it against the filename only, so anything under a directory
-# with `test` inside its name counted on one platform and not the other. Two
-# implementations of one ratchet that return different numbers means the number
-# means nothing, and the one CI reads is not the one the developer saw.
+# WHY THE VERDICT IS WRITTEN DOWN. The two implementations were first compared by
+# diffing their marker regexes, which are identical and always were; the
+# disagreement lived in the file filter next to them. Comparing the two ANSWERS
+# fixed that and introduced a subtler version of the same defect: parity is
+# agreement, not correctness. Gutting `is_source` in BOTH implementations so that
+# nothing at all is classified as source left the suite fully green -- two
+# implementations agreeing perfectly about nothing. An expected verdict is the
+# only thing neither implementation gets a vote on.
 #
 # Add the path that disagreed here BEFORE fixing the disagreement.
 
 # --- ordinary source: counted --------------------------------------------
-src/app.ts
-src/Api/Program.cs
-main.go
-lib/util.rb
-Makefile
-src/latest/run.ts
-src/testify-helpers/README.rs
-build-tools/gen.py
+source src/app.ts
+source src/Api/Program.cs
+source main.go
+source lib/util.rb
+source Makefile
+source src/latest/run.ts
+source src/testify-helpers/README.rs
+source build-tools/gen.py
+
+# --- `test` as a SUBSTRING is not a test file (G7) ------------------------
+# `git mv src/ledger.ts src/latest-ledger.ts` took the count from 1 to 0 on both
+# implementations. A rename is not a code review event, so anyone could walk
+# through that hole without meaning to.
+source src/latest-ledger.ts
+source protest.go
+source contest.rb
+source Greatest.cs
+source attestation.ts
+source Testing.cs
+
+# --- ...and as a WORD it is, however the language spells it ---------------
+skip src/order_test.go
+skip src/test_order.py
+skip src/OrderTests.cs
+skip src/UserSpec.scala
+skip src/order-tests.js
+skip Test.cs
 
 # --- the checker itself: never counted ------------------------------------
-check-stubs.sh
-check-stubs.ps1
-tooling/gate/check-stubs.sh
-tooling/gate/check-stubs.ps1
+skip check-stubs.sh
+skip check-stubs.ps1
+skip tooling/gate/check-stubs.sh
+skip tooling/gate/check-stubs.ps1
 
 # --- prose and data: never counted ----------------------------------------
-README.md
-README.MD
-notes.txt
-package.json
-config.yml
-config.YAML
-data.csv
-logo.svg
-yarn.lock
-go.sum
-docs/process/definition-of-done.md
-docs/anything.ts
-specs/feature/001-thing/spec.md
-specs/notes.ts
+skip README.md
+skip README.MD
+skip notes.txt
+skip package.json
+skip config.yml
+skip config.YAML
+skip data.csv
+skip logo.svg
+skip yarn.lock
+skip go.sum
+skip docs/process/definition-of-done.md
+skip docs/anything.ts
+skip specs/feature/001-thing/spec.md
+skip specs/notes.ts
 
 # --- vendored and generated trees: never counted --------------------------
-node_modules/left-pad/index.js
-app/node_modules/x/y.js
-vendor/gem/lib.rb
-src/vendor/thing.c
-dist/bundle.js
-app/dist/main.js
-build/out.o
-app/build/gen.cs
-static/app.min.js
+skip node_modules/left-pad/index.js
+skip app/node_modules/x/y.js
+skip vendor/gem/lib.rb
+skip src/vendor/thing.c
+skip dist/bundle.js
+skip app/dist/main.js
+skip build/out.o
+skip app/build/gen.cs
+skip static/app.min.js
 
 # --- tests: never counted -------------------------------------------------
-tests/run.sh
-test/run.sh
-src/tests/helper.ts
-src/Tests/Helper.cs
-src/__tests__/thing.js
-app.test.ts
-Widget.Tests.cs
-thing.spec.ts
-Thing.Spec.cs
-src/spec/support.rb
-src/specs/support.rb
+skip tests/run.sh
+skip test/run.sh
+skip src/tests/helper.ts
+skip src/Tests/Helper.cs
+skip src/__tests__/thing.js
+skip app.test.ts
+skip Widget.Tests.cs
+skip thing.spec.ts
+skip Thing.Spec.cs
+skip src/spec/support.rb
+skip src/specs/support.rb

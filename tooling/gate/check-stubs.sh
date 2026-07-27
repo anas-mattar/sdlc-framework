@@ -55,24 +55,63 @@ MARKERS='TODO|FIXME|HACK|XXX|NotImplementedException|NotImplementedError|Unimple
 EXEMPT='approved-stub:[[:space:]]*[^[:space:]]'
 # APPROVED-STUB-PATTERN-END
 
+# Is this basename a TEST file? Split into TOKENS at `.`, `_` and `-`, and ask
+# whether any token IS the word test/tests/spec/specs -- or ends with it in
+# CamelCase, which is how .NET, Java and Scala name theirs.
+#
+# The rule used to be the substring `*[Tt]est*`, and a substring is not a word:
+# `git mv src/ledger.ts src/latest-ledger.ts` took the count from 1 to 0 on both
+# implementations, and `protest.go`, `contest.rb`, `Greatest.cs` and
+# `attestation.ts` were invisible to the ratchet for as long as they existed.
+# Renaming a file is not a code review event, so that is a hole anyone could walk
+# through without meaning to.
+#
+# Erring the other way is deliberate: `Testing.cs` and `TestHelpers.cs` are now
+# SOURCE, so their markers count. A ratchet that counts too much fails loudly and
+# gets fixed; one that counts too little reports a floor nobody is standing on.
+#
+# Mirrored token for token in check-stubs.ps1's Test-IsTestName.
+is_test_name() {  # is_test_name <basename>
+    _ifs=$IFS
+    IFS='._-'
+    set -f                        # a token like `*` must not glob
+    # shellcheck disable=SC2086
+    set -- $1
+    set +f
+    IFS=$_ifs
+    for _t in "$@"; do
+        case "$_t" in
+            test|tests|Test|Tests|spec|specs|Spec|Specs) return 0 ;;
+            # CamelCase: `OrderTests`, `UserSpec`. A lower-case letter or digit
+            # before the capital is what keeps `Greatest` out -- its `test` is
+            # lower case and so is not a word boundary.
+            *[a-z0-9]Test|*[a-z0-9]Tests|*[a-z0-9]Spec|*[a-z0-9]Specs) return 0 ;;
+        esac
+    done
+    return 1
+}
+
 # Source files only. Tests are excluded because a TODO in a test is a note about a
 # test, not shipped behaviour; docs and specs are excluded because prose about
 # future work is the point of a roadmap. Vendored and generated trees are not ours.
 #
 # Every rule below is duplicated, EXACTLY, in check-stubs.ps1's Test-IsSource, and
-# tests/framework-checks.sh feeds both the same path list and diffs the answers.
-# The previous pair did not agree: this one matched `*[Tt]est*` against the WHOLE
-# path and the .ps1 matched it against the filename only, so `src/latest/run.ts`
-# was source on Windows and not on macOS. Where the two disagree, the .sh answer is
-# the one CI uses and the .ps1 answer is the one the developer sees.
+# tests/framework-checks.sh feeds both the same path list and diffs the answers
+# AGAINST THE VERDICT WRITTEN IN THE FIXTURE -- parity alone would let both sides
+# be gutted together and still agree.
+#
+# The locals are `_p`/`_b`, not `p`/`b`. POSIX sh has no function-local variables,
+# so the bare names clobbered the caller's loop variable: `--classify` echoed the
+# path the function had left behind rather than the one it was asked about, which
+# would have named the wrong file in any FAIL this fixture ever produced.
 is_source() {  # is_source <path>
-    p=${1%"${1##*[!/]}"}          # trailing slashes are not part of a filename
+    _p=${1%"${1##*[!/]}"}         # trailing slashes are not part of a filename
     # Fold backslashes only when there are any. This runs once per tracked file,
     # and a `tr` per file cost thirty seconds on Windows for a substitution that
     # is a no-op on every path `git ls-files` ever prints.
-    case "$p" in *\\*) p=$(printf '%s' "$p" | tr '\\' '/') ;; esac
-    b=${p##*/}
-    case "$b" in
+    case "$_p" in *\\*) _p=$(printf '%s' "$_p" | tr '\\' '/') ;; esac
+    _b=${_p##*/}
+    case "$_b" in
         # The checker itself names every marker it hunts for, in its own regex and
         # its own comments. Left in, it would count six of its own lines on a clean
         # repo -- a number nobody can explain and everybody learns to ignore.
@@ -84,14 +123,13 @@ is_source() {  # is_source <path>
         *.[Yy][Aa][Mm][Ll]|*.[Cc][Ss][Vv]|*.[Ss][Vv][Gg]|\
         *.[Ll][Oo][Cc][Kk]|*.[Ss][Uu][Mm]) return 1 ;;
         *.min.js) return 1 ;;
-        *[Tt]est*) return 1 ;;
-        *[Ss]pec.*) return 1 ;;
     esac
-    case "/$p" in
+    is_test_name "$_b" && return 1
+    case "/$_p" in
         */node_modules/*|*/vendor/*|*/dist/*|*/build/*) return 1 ;;
         */test/*|*/tests/*|*/Test/*|*/Tests/*|*/__tests__/*|*/spec/*|*/specs/*) return 1 ;;
     esac
-    case "$p" in
+    case "$_p" in
         docs/*|specs/*) return 1 ;;
     esac
     return 0
@@ -103,39 +141,79 @@ is_source() {  # is_source <path>
 # and -- worse -- would disagree with check-stubs.ps1, which filters per line. Two
 # implementations of one rule that quietly return different numbers is the exact
 # defect the sh/ps1 parity tests elsewhere in this framework exist to prevent.
+#
+# `--` before the paths, always. Without an option terminator a REPOSITORY FILE
+# NAMED LIKE A FLAG becomes one: with `-q` in the tree grep went quiet and the
+# count fell to zero, `-i` re-enabled the case-insensitive matching this pair was
+# rewritten to remove, and `-e` swallowed the pattern. A filename is data.
 stub_lines() {  # stub_lines <file>...
-    grep -nHE "$MARKERS" "$@" 2>/dev/null | grep -vE "$EXEMPT"
+    grep -nHE "$MARKERS" -- "$@" 2>/dev/null | grep -vE "$EXEMPT"
 }
 
-# The source files this repo has right now, one per line.
+# Every tracked-or-untracked path, ONE PER LINE, whatever is in the name.
 #
 # Tracked files plus untracked-but-not-ignored ones: the gate runs on a dirty
 # tree, and a stub added in an uncommitted file is exactly what this catches.
-source_files() {
-    for f in $(git ls-files --cached --others --exclude-standard 2>/dev/null); do
-        is_source "$f" || continue
-        [ -f "$f" ] || continue
-        printf '%s\n' "$f"
-    done
+#
+# Two flags carry the whole safety of this function:
+#
+#   core.quotePath=false  git's DEFAULT renders any non-ASCII path as a quoted C
+#         string -- `src/caf\303\251.ts` comes back as `"src/caf\303\251.ts"`,
+#         which is not the name of any file. The `[ -f ]` test below then failed
+#         and the file was skipped in silence, on every platform, so
+#         `mv ledger.ts ledgeŕ.ts` removed its markers from the count with no
+#         message. The .ps1 twin defaulted the same way and had the same hole.
+#   -z    NUL-delimited output, so a path containing a space or a glob character
+#         arrives whole. The old `for f in $(git ls-files)` word-split
+#         `src/my file.ts` into two non-existent paths and expanded `*.ts`
+#         against the working directory.
+#
+# POSIX `read` cannot split on NUL (`read -r -d ''` is a bashism and this script
+# runs under dash), so the stream is re-delimited: any newline INSIDE a path is
+# folded to \001 first, then NUL becomes the line separator. One line is then
+# always exactly one path, and the fold is undone below.
+tracked_paths() {
+    git -c core.quotePath=false ls-files -z --cached --others --exclude-standard 2>/dev/null \
+        | tr '\n\0' '\1\n'
 }
+
+SOH=$(printf '\001')
 
 # ONE grep over the whole list rather than one per file. Two forks per file took
 # thirty seconds on a repository of eighty files, and this script runs inside the
 # gate, which is meant to be run often. `-H` forces the filename prefix even when
 # the list happens to be one file, so the output shape does not change with the
 # size of the repo -- and it is the shape check-stubs.ps1 prints too.
+#
+# The list is built in the POSITIONAL PARAMETERS rather than in a string: `$@`
+# survives spaces, quotes and glob characters that word-splitting a variable
+# cannot. A here-doc redirect (not a pipe) keeps the loop in this shell so the
+# accumulated `$@` outlives it.
 all_stub_lines() {
-    files=$(source_files)
-    [ -n "$files" ] || return 0
-    # Word splitting is intended here: the list is one path per line and git does
-    # not print backslashes. A path containing a space was already split by the
-    # loop above, which is a pre-existing limitation of both implementations.
-    # shellcheck disable=SC2086
-    stub_lines $files
+    set --
+    while IFS= read -r _line; do
+        [ -n "$_line" ] || continue
+        case "$_line" in *"$SOH"*) _line=$(printf '%s' "$_line" | tr '\1' '\n') ;; esac
+        is_source "$_line" || continue
+        [ -f "$_line" ] || continue
+        set -- "$@" "$_line"
+    done <<EOF
+$(tracked_paths)
+EOF
+    [ "$#" -gt 0 ] || return 0
+    stub_lines "$@"
 }
 
+# `wc -l`, not `grep -c ''`. `grep -c` prints 0 AND EXITS 1 when nothing matches,
+# so `|| echo 0` fired as well and this function returned the two-line string
+# "0\n0" on any tree with no markers -- which is the state every project adopting
+# the ratchet on a clean codebase starts in. Downstream that wrote a corrupt
+# `0\n0` into the pinned baseline file, made every `[ "$current" -gt ... ]`
+# comparison die with "Illegal number", and -- because a failed `[` is false --
+# fell through to `exit 0`, so the ratchet passed inertly. `wc -l` exits 0 on
+# empty input and has no such second channel.
 count_stubs() {
-    all_stub_lines | grep -c '' 2>/dev/null || echo 0
+    all_stub_lines | wc -l | tr -d ' '
 }
 
 # --- test-support modes -----------------------------------------------------
@@ -167,7 +245,7 @@ fi
 if [ "${1:-}" = "--baseline" ]; then
     echo "$current" > "$BASELINE_FILE"
     echo "STUBS: baseline set to $current — commit $BASELINE_FILE."
-    echo "  Pin it too, in the same commit:  sha256sum gate.sh check-stubs.sh $BASELINE_FILE > .gate-sha256"
+    echo "  Pin it too, in the same commit:  sha256sum gate.sh gate.ps1 check-stubs.sh check-stubs.ps1 $BASELINE_FILE > .gate-sha256"
     exit 0
 fi
 
